@@ -8,11 +8,14 @@ type PhotoGetBody = { op: "photo-get"; token: string; id: string };
 type PhotoPutBody = { op: "photo-put"; token: string; id: string; data: string };
 
 async function postApi<T>(body: PullBody | PushBody | PhotoGetBody | PhotoPutBody): Promise<T | null> {
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 12_000) : null;
   try {
     const res = await fetch("/api/pos-cloud", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify(body),
+      signal: ctrl?.signal,
     });
     const ct = res.headers.get("content-type") ?? "";
     if (!ct.includes("json")) return null;
@@ -20,6 +23,8 @@ async function postApi<T>(body: PullBody | PushBody | PhotoGetBody | PhotoPutBod
     return data;
   } catch {
     return null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

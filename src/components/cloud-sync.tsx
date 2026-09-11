@@ -82,10 +82,6 @@ export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local")
     const s0 = usePos.getState();
     if (!s0.deviceId) s0.setCloudMeta({ deviceId: newDeviceId() });
 
-    const off = await offloadAttendanceList(usePos.getState().attendance);
-    if (off.changed) usePos.setState({ attendance: off.rows });
-    await flushPendingPhotos();
-
     const pulled = await pullCloudClient(VENUE_PASS_SHA256);
     if (!pulled.ok) {
       usePos.getState().setCloudMeta({ cloudStatus: "error", cloudError: pulled.error });
@@ -134,6 +130,15 @@ export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local")
     });
   } finally {
     busy = false;
+    void (async () => {
+      try {
+        const off = await offloadAttendanceList(usePos.getState().attendance);
+        if (off.changed) usePos.setState({ attendance: off.rows });
+        await flushPendingPhotos();
+      } catch {
+        /* foto tidak boleh menahan sinkron order/menu */
+      }
+    })();
   }
 }
 
@@ -197,17 +202,31 @@ export function CloudSyncBadge({ compact = false }: { compact?: boolean }) {
   const error = usePos((s) => s.cloudError);
   const at = usePos((s) => s.cloudAt);
   const [now, setNow] = useState(() => Date.now());
+  const [checkedAt, setCheckedAt] = useState(0);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 15000);
     return () => window.clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    if (status === "ok") setCheckedAt(Date.now());
+  }, [status, at]);
+
+  const clock = checkedAt || (at ? Date.parse(at) : 0);
+  const timeLabel = clock
+    ? new Date(clock).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
   const label =
     status === "syncing"
       ? "Menyimpan…"
       : status === "ok"
-        ? "Tersinkron"
+        ? compact
+          ? timeLabel || "OK"
+          : timeLabel
+            ? `Tersinkron · ${timeLabel}`
+            : "Tersinkron"
         : status === "offline"
           ? "Offline"
           : status === "error"
@@ -226,7 +245,11 @@ export function CloudSyncBadge({ compact = false }: { compact?: boolean }) {
         : "text-muted-foreground border-border bg-card";
 
   const Icon = status === "syncing" ? LoaderCircle : status === "offline" || status === "error" ? CloudOff : Cloud;
-  const title = error || (at ? `Cloud · ${new Date(at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}` : "Sinkron tablet & laptop");
+  const title =
+    error ||
+    (clock
+      ? `Dicek ${new Date(clock).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`
+      : "Sinkron tablet & laptop");
 
   return (
     <button
@@ -240,7 +263,7 @@ export function CloudSyncBadge({ compact = false }: { compact?: boolean }) {
     >
       <Icon className={cn("size-3.5", status === "syncing" && "animate-spin")} />
       {!compact && <span>{label}</span>}
-      {status === "ok" && !compact && at && now - Date.parse(at) < 120000 && (
+      {status === "ok" && !compact && now - clock < 120000 && clock > 0 && (
         <RefreshCw className="size-3 opacity-50" />
       )}
     </button>
