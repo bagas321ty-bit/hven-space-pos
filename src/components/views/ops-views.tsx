@@ -184,6 +184,23 @@ const KDS_COLS: { id: "open" | "done"; label: string; match: (s: KdsStatus) => b
   { id: "done", label: "Selesai", match: (s) => s === "done" },
 ];
 
+function kdsClock(iso?: string) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
+}
+
+function kdsWait(iso: string, now: number) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const sec = Math.max(0, Math.floor((now - t) / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m >= 60) return `${Math.floor(m / 60)}j ${m % 60}m`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export function KitchenView() {
   const allOrders = usePos((s) => s.orders);
   const orders = allOrders.filter(
@@ -212,12 +229,31 @@ export function KitchenView() {
               <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
                 {list.map((o) => (
                   <div key={o.id} className="rounded-lg border border-border bg-muted/40 p-3">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span className="font-mono text-foreground">{o.number}</span>
+                    <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="font-mono text-sm text-foreground">{o.number}</span>
+                      <span className="font-mono text-sm font-medium text-foreground tabular-nums">{kdsClock(o.createdAt)}</span>
+                    </div>
+                    <div className="mt-0.5 flex justify-between text-xs text-muted-foreground">
                       <span>
                         {o.status === "open" ? "Open · " : ""}
                         {o.type} {o.table !== "-" ? o.table : ""}
                       </span>
+                      {o.kdsStatus !== "done" ? (
+                        <span
+                          className={cn(
+                            "font-mono tabular-nums",
+                            now - Date.parse(o.createdAt) >= 15 * 60_000
+                              ? "text-destructive"
+                              : now - Date.parse(o.createdAt) >= 8 * 60_000
+                                ? "text-warning"
+                                : "",
+                          )}
+                        >
+                          {kdsWait(o.createdAt, now)}
+                        </span>
+                      ) : o.kdsDoneAt ? (
+                        <span className="font-mono tabular-nums">selesai {kdsClock(o.kdsDoneAt)}</span>
+                      ) : null}
                     </div>
                     <ul className="mt-2 space-y-1 text-sm">
                       {o.items
