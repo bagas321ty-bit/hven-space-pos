@@ -181,7 +181,7 @@ export function AppShell() {
 
   const me = staff.find((s) => s.id === currentStaffId);
   const activeOrders = orders.filter((o) => o.status === "open" || (o.status === "paid" && o.kdsStatus !== "done")).length;
-  const kdsNew = orders.filter((o) => o.kdsStatus === "new" && o.status !== "void").length;
+  const kdsNew = orders.filter((o) => o.kdsStatus !== "done" && o.status !== "void" && o.items.some((i) => i.kitchen)).length;
   const feedbackDue = orders.filter((o) => o.feedbackStatus === "due" && o.status !== "void").length;
   const lowStock = inventory.filter(isIngredientLow).length;
 

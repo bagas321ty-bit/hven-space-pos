@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatIDR } from "@/lib/format";
-import { FILL_META, FILL_ORDER, fillFromStock, isIngredientLow, stockFromFill, stockLabel } from "@/lib/inventory";
+import { FILL_META, FILL_ORDER, fillFromStock, isIngredientLow, jarFullQty, qtyLabel, stockFromFill } from "@/lib/inventory";
 import { usePos } from "@/lib/store";
-import type { FillLevel, Ingredient, OpnameKind, Staff } from "@/lib/types";
+import type { FillLevel, Ingredient, Staff } from "@/lib/types";
 import { alertWaText, sendWhatsApp, toWaPhone, type WaMode } from "@/lib/whatsapp";
 import { cn } from "@/lib/utils";
 
@@ -245,24 +245,20 @@ export function InventoryView() {
   const addIngredient = usePos((s) => s.addIngredient);
   const updateIngredient = usePos((s) => s.updateIngredient);
   const commitOpname = usePos((s) => s.commitOpname);
-  const [tab, setTab] = useState<"pcs" | "level">("pcs");
-  const [pcsDraft, setPcsDraft] = useState<Record<string, string>>({});
   const [levelDraft, setLevelDraft] = useState<Record<string, FillLevel>>({});
-  const [form, setForm] = useState({ name: "", sku: "", stock: 0, minStock: 1, unit: "pcs", cost: 0, opname: "pcs" as OpnameKind });
+  const [form, setForm] = useState({ name: "", sku: "", stock: 0, minStock: 1, unit: "pcs", cost: 0 });
   const [edit, setEdit] = useState<Ingredient | null>(null);
-  const pcsItems = inventory.filter((i) => (i.opname ?? "pcs") === "pcs");
-  const levelItems = inventory.filter((i) => i.opname === "level");
-  const items = tab === "pcs" ? pcsItems : levelItems;
   const lowCount = inventory.filter(isIngredientLow).length;
+  const jarOf = (i: Ingredient) => ({ ...i, fullQty: jarFullQty(i) });
 
   const saveOpname = () => {
-    if (tab === "pcs") {
-      commitOpname(pcsItems.map((i) => ({ id: i.id, stock: Number(pcsDraft[i.id] ?? i.stock) })));
-    } else {
-      commitOpname(levelItems.map((i) => ({ id: i.id, stock: stockFromFill(i, levelDraft[i.id] ?? fillFromStock(i)) })));
-    }
+    commitOpname(
+      inventory.map((i) => {
+        const jar = jarOf(i);
+        return { id: i.id, stock: stockFromFill(jar, levelDraft[i.id] ?? fillFromStock(jar)) };
+      }),
+    );
     toast.success("Stok opname tersimpan.");
-    setPcsDraft({});
     setLevelDraft({});
   };
 
@@ -271,71 +267,47 @@ export function InventoryView() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-xl font-medium">Stok opname</h2>
-          <p className="text-sm text-muted-foreground">
-            Pcs = hitung karton/pack. Toples = lihat sisa (penuh / setengah / seperempat / habis). Alert bisa diatur per bahan.
-          </p>
+          <p className="text-sm text-muted-foreground">Lihat toples. Jumlah tercatat di samping nama bahan.</p>
         </div>
-        {lowCount > 0 && <Badge tone="danger">{lowCount} bahan tidak aman</Badge>}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button size="lg" variant={tab === "pcs" ? "default" : "secondary"} onClick={() => setTab("pcs")}>
-          Hitung pcs ({pcsItems.length})
-        </Button>
-        <Button size="lg" variant={tab === "level" ? "default" : "secondary"} onClick={() => setTab("level")}>
-          Lihat toples ({levelItems.length})
-        </Button>
-        <Button className="ml-auto" onClick={saveOpname}>
-          Simpan opname
-        </Button>
+        <div className="flex items-center gap-2">
+          {lowCount > 0 && <Badge tone="danger">{lowCount} bahan tidak aman</Badge>}
+          <Button onClick={saveOpname}>Simpan opname</Button>
+        </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {items.map((i) => {
-          const low = isIngredientLow({
-            ...i,
-            stock: tab === "pcs" ? Number(pcsDraft[i.id] ?? i.stock) : stockFromFill(i, levelDraft[i.id] ?? fillFromStock(i)),
-          });
+        {inventory.map((i) => {
+          const jar = jarOf(i);
+          const fill = levelDraft[i.id] ?? fillFromStock(jar);
+          const shown = stockFromFill(jar, fill);
+          const low = isIngredientLow({ ...jar, stock: shown, opname: "level" });
           return (
             <div key={i.id} className={`rounded-xl border bg-card p-4 ${low ? "border-destructive/50" : "border-border"}`}>
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-medium">{i.name}</p>
-                  <p className="text-xs text-muted-foreground">{i.sku} · sistem {stockLabel(i)}</p>
+                  <p className="font-medium">
+                    {i.name}
+                    <span className="ml-2 font-mono text-sm text-muted-foreground">{qtyLabel(shown, i.unit)}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">{i.sku}</p>
                 </div>
                 <button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => setEdit(i)} aria-label="Atur alert">
                   Atur
                 </button>
               </div>
-              {tab === "pcs" ? (
-                <label className="block space-y-1">
-                  <span className="text-xs text-muted-foreground">Hitungan pcs di rak</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1}
-                    className="h-12 font-mono text-lg"
-                    value={pcsDraft[i.id] ?? String(i.stock)}
-                    onChange={(e) => setPcsDraft((d) => ({ ...d, [i.id]: e.target.value }))}
-                  />
-                  <span className="text-xs text-muted-foreground">Alert jika ≤ {i.minStock} pcs</span>
-                </label>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {FILL_ORDER.map((lv) => (
-                    <Button
-                      key={lv}
-                      type="button"
-                      className="h-12"
-                      variant={(levelDraft[i.id] ?? fillFromStock(i)) === lv ? "default" : "secondary"}
-                      onClick={() => setLevelDraft((d) => ({ ...d, [i.id]: lv }))}
-                    >
-                      {FILL_META[lv].label}
-                    </Button>
-                  ))}
-                  <p className="col-span-2 text-xs text-muted-foreground">
-                    Alert mulai {FILL_META[i.alertAt ?? "quarter"].label}
-                  </p>
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-2">
+                {FILL_ORDER.map((lv) => (
+                  <Button
+                    key={lv}
+                    type="button"
+                    className="h-12"
+                    variant={fill === lv ? "default" : "secondary"}
+                    onClick={() => setLevelDraft((d) => ({ ...d, [i.id]: lv }))}
+                  >
+                    {FILL_META[lv].label}
+                  </Button>
+                ))}
+                <p className="col-span-2 text-xs text-muted-foreground">Alert mulai {FILL_META[i.alertAt ?? "quarter"].label}</p>
+              </div>
               {low && <p className="mt-2 text-xs text-destructive">Tidak aman — restock.</p>}
             </div>
           );
@@ -352,24 +324,17 @@ export function InventoryView() {
             sku: form.sku || `ING-${inventory.length + 1}`,
             stock: form.stock,
             minStock: form.minStock,
-            unit: form.opname === "pcs" ? "pcs" : form.unit,
+            unit: form.unit || "pcs",
             cost: form.cost,
-            opname: form.opname,
-            fullQty: form.opname === "level" ? Math.max(form.stock, 0.1) : undefined,
+            opname: "level",
+            fullQty: Math.max(form.stock, 0.1),
             alertAt: "quarter",
           });
-          setForm({ name: "", sku: "", stock: 0, minStock: 1, unit: "pcs", cost: 0, opname: "pcs" });
+          setForm({ name: "", sku: "", stock: 0, minStock: 1, unit: "pcs", cost: 0 });
         }}
       >
         <Input placeholder="Nama bahan" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <select
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          value={form.opname}
-          onChange={(e) => setForm({ ...form, opname: e.target.value as OpnameKind })}
-        >
-          <option value="pcs">Opname pcs</option>
-          <option value="level">Opname toples</option>
-        </select>
+        <Input placeholder="Satuan kg/L/pcs" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
         <Input type="number" placeholder="Stok awal" value={form.stock || ""} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} />
         <Input type="number" placeholder="Alert min" value={form.minStock || ""} onChange={(e) => setForm({ ...form, minStock: Number(e.target.value) })} />
         <Input type="number" placeholder="HPP" value={form.cost || ""} onChange={(e) => setForm({ ...form, cost: Number(e.target.value) })} />
@@ -391,7 +356,7 @@ export function InventoryView() {
           .join(" · ") || "—"}
       </p>
       <Dialog open={!!edit} onOpenChange={(v) => !v && setEdit(null)}>
-        <DialogContent title="Atur alert & cara opname" className="max-w-md">
+        <DialogContent title="Atur alert toples" className="max-w-md">
           {edit && (
             <IngredientSettings
               item={edit}
@@ -409,58 +374,43 @@ export function InventoryView() {
 }
 
 function IngredientSettings({ item, onSave }: { item: Ingredient; onSave: (i: Ingredient) => void }) {
-  const [opname, setOpname] = useState<OpnameKind>(item.opname ?? "pcs");
   const [minStock, setMinStock] = useState(item.minStock);
   const [alertAt, setAlertAt] = useState<FillLevel>(item.alertAt ?? "quarter");
-  const [fullQty, setFullQty] = useState(item.fullQty ?? item.stock);
+  const [fullQty, setFullQty] = useState(item.fullQty ?? jarFullQty(item));
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium">{item.name}</p>
+      <p className="text-sm font-medium">
+        {item.name}
+        <span className="ml-2 font-mono text-muted-foreground">{qtyLabel(item.stock, item.unit)}</span>
+      </p>
       <label className="block space-y-1 text-sm">
-        Cara opname
-        <select
-          className="h-11 w-full rounded-md border border-input bg-background px-3"
-          value={opname}
-          onChange={(e) => setOpname(e.target.value as OpnameKind)}
-        >
-          <option value="pcs">Hitung pcs (susu, cup, pack)</option>
-          <option value="level">Lihat toples (penuh–habis)</option>
-        </select>
+        Isi penuh toples
+        <Input type="number" step="0.1" className="h-11" value={fullQty} onChange={(e) => setFullQty(Number(e.target.value))} />
       </label>
-      {opname === "pcs" ? (
-        <label className="block space-y-1 text-sm">
-          Alert jika stok ≤
-          <Input type="number" min={0} className="h-11" value={minStock} onChange={(e) => setMinStock(Number(e.target.value))} />
-        </label>
-      ) : (
-        <>
-          <label className="block space-y-1 text-sm">
-            Isi penuh toples (untuk resep)
-            <Input type="number" step="0.1" className="h-11" value={fullQty} onChange={(e) => setFullQty(Number(e.target.value))} />
-          </label>
-          <div>
-            <p className="mb-2 text-sm">Alert mulai</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(["half", "quarter", "empty"] as FillLevel[]).map((lv) => (
-                <Button key={lv} type="button" variant={alertAt === lv ? "default" : "secondary"} onClick={() => setAlertAt(lv)}>
-                  {FILL_META[lv].label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+      <label className="block space-y-1 text-sm">
+        Alert jika stok ≤
+        <Input type="number" min={0} className="h-11" value={minStock} onChange={(e) => setMinStock(Number(e.target.value))} />
+      </label>
+      <div>
+        <p className="mb-2 text-sm">Alert mulai (tampilan toples)</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(["half", "quarter", "empty"] as FillLevel[]).map((lv) => (
+            <Button key={lv} type="button" variant={alertAt === lv ? "default" : "secondary"} onClick={() => setAlertAt(lv)}>
+              {FILL_META[lv].label}
+            </Button>
+          ))}
+        </div>
+      </div>
       <Button
         className="w-full"
         size="lg"
         onClick={() =>
           onSave({
             ...item,
-            opname,
+            opname: "level",
             minStock,
             alertAt,
-            fullQty: opname === "level" ? fullQty : item.fullQty,
-            unit: opname === "pcs" ? "pcs" : item.unit,
+            fullQty,
           })
         }
       >

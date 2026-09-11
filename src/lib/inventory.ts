@@ -61,6 +61,17 @@ export function isIngredientLow(i: Ingredient): boolean {
 }
 
 export function stockLabel(i: Ingredient): string {
-  if (i.opname === "level") return FILL_META[fillFromStock(i)].label;
-  return `${i.stock} ${i.unit}`;
+  if (i.opname === "level") return `${qtyLabel(i.stock, i.unit)} · ${FILL_META[fillFromStock(i)].label}`;
+  return qtyLabel(i.stock, i.unit);
+}
+
+export function qtyLabel(stock: number, unit?: string): string {
+  const u = unit || "pcs";
+  const n = u === "pcs" ? Math.round(stock) : Number(Number(stock).toFixed(2));
+  return `${n} ${u}`;
+}
+
+export function jarFullQty(i: Ingredient): number {
+  if (i.fullQty && i.fullQty > 0) return i.fullQty;
+  return Math.max(i.stock, i.minStock || 0, 1);
 }

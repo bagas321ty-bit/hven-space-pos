@@ -111,7 +111,9 @@ export function OrdersView() {
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap gap-1">
-                    <Badge tone={o.kdsStatus === "done" ? "success" : "warning"}>{o.kdsStatus}</Badge>
+                    <Badge tone={o.kdsStatus === "done" ? "success" : "warning"}>
+                      {o.kdsStatus === "done" ? "Selesai" : "Baru"}
+                    </Badge>
                     {o.feedbackStatus === "due" && <Badge tone="danger">Feedback</Badge>}
                     {o.feedbackStatus === "waiting" && <Badge tone="warning">Cek 10 mnt</Badge>}
                     {o.feedbackStatus === "done" && (
@@ -177,11 +179,9 @@ export function OrdersView() {
   );
 }
 
-const KDS_COLS: { id: KdsStatus; label: string }[] = [
-  { id: "new", label: "Baru" },
-  { id: "cooking", label: "Dimasak" },
-  { id: "ready", label: "Siap" },
-  { id: "done", label: "Selesai" },
+const KDS_COLS: { id: "open" | "done"; label: string; match: (s: KdsStatus) => boolean }[] = [
+  { id: "open", label: "Baru", match: (s) => s !== "done" },
+  { id: "done", label: "Selesai", match: (s) => s === "done" },
 ];
 
 export function KitchenView() {
@@ -197,13 +197,12 @@ export function KitchenView() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const next: Record<KdsStatus, KdsStatus | null> = { new: "cooking", cooking: "ready", ready: "done", done: null };
   return (
     <div className="flex h-full flex-col gap-3 p-4">
       <h2 className="font-display text-xl font-medium">Kitchen Display</h2>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-2">
         {KDS_COLS.map((col) => {
-          const list = orders.filter((o) => o.kdsStatus === col.id);
+          const list = orders.filter((o) => col.match(o.kdsStatus));
           return (
             <div key={col.id} className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-3">
               <div className="mb-2 flex items-center justify-between text-sm">
@@ -230,7 +229,7 @@ export function KitchenView() {
                           </li>
                         ))}
                     </ul>
-                    {o.kdsStatus === "new" && (
+                    {o.kdsStatus !== "done" && (
                       <div className={cn("mt-2 gap-1", waKitchenMode === "number" ? "grid grid-cols-2" : "")}>
                         <Button
                           size="sm"
@@ -259,9 +258,9 @@ export function KitchenView() {
                         )}
                       </div>
                     )}
-                    {next[o.kdsStatus] && (
-                      <Button size="sm" className="mt-2 w-full" onClick={() => setKds(o.id, next[o.kdsStatus]!)}>
-                        {next[o.kdsStatus] === "cooking" ? "Mulai masak" : next[o.kdsStatus] === "ready" ? "Siap disaji" : "Selesai"}
+                    {o.kdsStatus !== "done" && (
+                      <Button size="sm" className="mt-2 w-full" onClick={() => setKds(o.id, "done")}>
+                        Selesai
                       </Button>
                     )}
                     {o.kdsStatus === "done" && o.feedbackStatus === "waiting" && (
