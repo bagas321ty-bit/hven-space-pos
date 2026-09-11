@@ -1,9 +1,14 @@
 # HVEN Space POS
 
-Kasir, kitchen KDS, absensi, dan pembukuan.
+Kasir, kitchen, absensi, pembukuan.
 
-Hosting produksi lama di Netlify (tim bagas321ty) kehabisan kredit deploy.
-Situs yang sudah live tetap jalan. Update baru diarahkan ke **Vercel Hobby (gratis)**.
-Data cloud tetap memakai penyimpanan yang sama.
+## URL
 
-Buka di tablet & laptop: setelah Vercel live, pakai URL Vercel.
+- **Baru (Vercel, gratis):** https://hven-space-pos-bagas321ty-1278.vercel.app
+- Cadangan data lama: https://hven-space-pos.netlify.app
+
+Kalau Vercel minta login: buka project → **Settings → Deployment Protection** → matikan Vercel Authentication. Tablet kasir tidak perlu akun Vercel.
+
+## Build
+
+Vercel Hobby, Node 22. Data cloud tablet↔laptop tetap memakai penyimpanan yang sudah ada.
