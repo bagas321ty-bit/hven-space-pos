@@ -11,7 +11,8 @@ export function onCloudNudge(fn: Handler) {
   }
 }
 
-/** Call after local writes (pengeluaran, pemasukan, dll.) so sync cannot skip. */
+/** Wajib setelah setiap tulis data (pengeluaran, setor, menu, stok, …).
+ *  Tanpa ini sinkron bisa skip. Lihat AGENTS.project.md. */
 export function nudgeCloud() {
   if (handler) handler();
   else pending = true;
