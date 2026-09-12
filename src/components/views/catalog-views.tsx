@@ -251,7 +251,16 @@ export function ProductsView() {
                       <Button size="sm" variant="secondary" onClick={() => openEdit(p)}>
                         Edit
                       </Button>
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => del(p.id)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={() => {
+                          del(p.id);
+                          toast.success(`${p.name} dihapus.`);
+                          void runCloudSync("local");
+                        }}
+                      >
                         Hapus
                       </Button>
                     </div>

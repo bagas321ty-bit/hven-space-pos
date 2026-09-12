@@ -29,6 +29,7 @@ import { SEED_MONEY, replayMoney } from "@/lib/types";
 import type { WaMode } from "@/lib/whatsapp";
 import { SAMPLE_ORDERS, PRODUCTS } from "@/data/seed";
 import { slimAttendance } from "@/lib/att-photo-slim";
+import { slimMenuImage, pickMenuImage } from "@/lib/menu-photos";
 
 export const POS_CLOUD_TOKEN_KEY = "hven-sync-v1";
 
@@ -71,6 +72,7 @@ export interface CloudPayload {
   moneyBooks?: MoneyBooks;
   ledger?: LedgerEntry[];
   expenseGone?: string[];
+  productGone?: string[];
   workShifts: WorkShift[];
   shiftLogs: ShiftChangeLog[];
   cart: CartItem[];
@@ -191,7 +193,7 @@ function pickProduct(a: Product, b: Product): Product {
     Boolean(p.image) ||
     Boolean(p.blurb);
   const named = aT || bT ? (bT > aT ? b : a) : changed(a) && !changed(b) ? a : changed(b) && !changed(a) ? b : (a.soldQty ?? 0) >= (b.soldQty ?? 0) ? a : b;
-  const image = (bT > aT ? b.image || a.image : a.image || b.image) || named.image;
+  const image = pickMenuImage(a.image, b.image) || named.image;
   const blurb = (bT > aT ? b.blurb || a.blurb : a.blurb || b.blurb) || named.blurb;
   return { ...named, stock, soldQty: sold, available: named.available, image, blurb, updatedAt: bT > aT ? bT : aT || named.updatedAt };
 }
@@ -289,12 +291,14 @@ export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudP
   const rs = liveScore(remote);
   const preferLocal = ls >= rs;
   const expenseGone = unionGone(local.expenseGone, remote.expenseGone);
+  const productGone = unionGone(local.productGone, remote.productGone);
 
   return {
-    products: unionById(local.products, remote.products, pickProduct),
+    products: unionById(local.products, remote.products, pickProduct).filter((p) => !productGone.includes(p.id)),
     menuCategories: unionCats(local.menuCategories, remote.menuCategories),
     orders: unionById(local.orders, remote.orders, pickOrder).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
     expenseGone,
+    productGone,
     expenses: settleExpenses(unionById(local.expenses, remote.expenses, (a, b) => pickExpense(a, b, preferLocal)), expenseGone),
     incomes: unionById(local.incomes, remote.incomes, (a, b) => (preferLocal ? a : b)),
     incidents: unionById(local.incidents, remote.incidents, (a, b) => (preferLocal ? a : b)),
@@ -368,11 +372,14 @@ function mergeCartFields(local: CloudPayload, remote: CloudPayload): { cart: Car
 
 export function extractPayload(s: CloudPayload): CloudPayload {
   return {
-    products: s.products,
+    products: (s.products ?? [])
+      .filter((p) => !(s.productGone ?? []).includes(p.id))
+      .map((p) => ({ ...p, image: slimMenuImage(p.image, p.id) })),
     menuCategories: s.menuCategories,
     orders: s.orders,
     expenses: s.expenses,
     expenseGone: s.expenseGone ?? [],
+    productGone: s.productGone ?? [],
     incomes: s.incomes,
     incidents: s.incidents,
     inventory: s.inventory,
@@ -422,6 +429,7 @@ export function payloadFingerprint(p: CloudPayload): string {
     p.products.map((x) => `${x.id}:${x.price}:${x.image?.length ?? 0}`).join(","),
     exp,
     (p.expenseGone ?? []).join(","),
+    (p.productGone ?? []).join(","),
     inc,
     cash,
     `${p.moneyBooks?.rekening ?? 0}:${p.moneyBooks?.cash ?? 0}:${p.moneyBooks?.sisihGajiBank ?? 0}`,

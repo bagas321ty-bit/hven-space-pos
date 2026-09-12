@@ -49,6 +49,7 @@ import {
   normalizeManagerCash,
   replayMoney,
 } from "@/lib/types";
+import { pickMenuImage } from "@/lib/menu-photos";
 import { FEEDBACK_WAIT_MS, hasKitchenItems } from "@/lib/feedback";
 import {
   ADDONS,
@@ -164,6 +165,7 @@ export interface AppState {
   orders: Order[];
   expenses: Expense[];
   expenseGone: string[];
+  productGone: string[];
   incomes: Income[];
   incidents: Incident[];
   inventory: Ingredient[];
@@ -333,7 +335,7 @@ function keepProductMedia(incoming: Product[], prev: Product[]): Product[] {
     if (!o) return p;
     return {
       ...p,
-      image: p.image || o.image,
+      image: pickMenuImage(p.image, o.image),
       blurb: p.blurb || o.blurb,
       updatedAt: (p.updatedAt ?? "") >= (o.updatedAt ?? "") ? p.updatedAt : o.updatedAt,
     };
@@ -492,6 +494,7 @@ export const usePos = create<AppState>()(
       orders: SAMPLE_ORDERS,
       expenses: EXPENSES,
       expenseGone: [],
+      productGone: [],
       incomes: INCOMES,
       incidents: INCIDENTS,
       inventory: INVENTORY,
@@ -1554,11 +1557,14 @@ export const usePos = create<AppState>()(
         });
         nudgeCloud();
       },
-      deleteProduct: (id) =>
+      deleteProduct: (id) => {
         set({
           products: get().products.filter((p) => p.id !== id),
           recipes: get().recipes.filter((r) => r.productId !== id),
-        }),
+          productGone: [id, ...get().productGone.filter((x) => x !== id)].slice(0, 800),
+        });
+        nudgeCloud();
+      },
       setProductRecipes: (productId, lines) =>
         set({
           recipes: [...get().recipes.filter((r) => r.productId !== productId), ...lines.filter((l) => l.qty > 0)],
@@ -1976,11 +1982,14 @@ export const usePos = create<AppState>()(
             : get().managerCashCap;
         set({
           cloudApplying: true,
-          products: keepProductMedia(payload.products, get().products),
+          products: keepProductMedia(payload.products, get().products).filter(
+            (p) => !(payload.productGone ?? get().productGone ?? []).includes(p.id),
+          ),
           menuCategories: ensureMenuCategories(payload.menuCategories, payload.products),
           orders: payload.orders,
           expenses: settleExpenses(keepExpensePay(payload.expenses ?? [], get().expenses), payload.expenseGone ?? get().expenseGone),
           expenseGone: payload.expenseGone ?? get().expenseGone ?? [],
+          productGone: payload.productGone ?? get().productGone ?? [],
           incomes: payload.incomes,
           incidents: payload.incidents,
           inventory: payload.inventory.map(normalizeIngredient),
@@ -2074,6 +2083,7 @@ export const usePos = create<AppState>()(
           tutupBuku: ensureTutupBuku(p.tutupBuku ?? current.tutupBuku),
           moneyIn: p.moneyIn ?? [],
           expenseGone: Array.isArray(p.expenseGone) ? p.expenseGone.filter((x) => typeof x === "string") : [],
+          productGone: Array.isArray(p.productGone) ? p.productGone.filter((x) => typeof x === "string") : [],
           menuCategories: ensureMenuCategories(p.menuCategories, p.products ?? current.products),
           sheetSync: p.sheetSync ?? "",
           openBillId: p.openBillId ?? null,
@@ -2092,7 +2102,7 @@ export const usePos = create<AppState>()(
           ...synced,
           ...withoutTestTickets({
             orders: p.orders ?? current.orders,
-            products: synced.products,
+            products: (synced.products ?? []).filter((x) => !(Array.isArray(p.productGone) ? p.productGone : []).includes(x.id)),
             inventory: (p.inventory ?? current.inventory).map(normalizeIngredient),
             shift: { ...(p.shift ?? current.shift), open: true },
           }),
@@ -2111,6 +2121,7 @@ export const usePos = create<AppState>()(
         orders: s.orders,
         expenses: s.expenses,
         expenseGone: s.expenseGone,
+        productGone: s.productGone,
         incomes: s.incomes,
         incidents: s.incidents,
         inventory: s.inventory,

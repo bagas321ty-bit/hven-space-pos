@@ -9,6 +9,7 @@ import {
 } from "@/lib/pos-cloud";
 import { usePos } from "@/lib/store";
 import { offloadAttendanceList, flushPendingPhotos } from "@/lib/att-photo";
+import { flushMenuPhotos, hydrateMenuPhotos } from "@/lib/menu-photo-sync";
 import { onCloudNudge } from "@/lib/cloud-nudge";
 import { VENUE_PASS_SHA256 } from "@/lib/venue-auth";
 import { cn } from "@/lib/utils";
@@ -147,6 +148,9 @@ export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local")
         const off = await offloadAttendanceList(usePos.getState().attendance);
         if (off.changed) usePos.setState({ attendance: off.rows });
         await flushPendingPhotos();
+        await flushMenuPhotos(usePos.getState().products);
+        const menu = await hydrateMenuPhotos(usePos.getState().products);
+        if (menu.changed) usePos.setState({ products: menu.rows });
       } catch {
         /* foto tidak boleh menahan sinkron order/menu */
       }

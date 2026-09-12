@@ -18,7 +18,7 @@ export const MENU_LIBRARY = [
 const PHOTOS: Record<string, string> = Object.fromEntries(MENU_LIBRARY.map((x) => [x.id, x.src]));
 
 export function menuPhoto(p: Pick<Product, "name" | "category"> & { image?: string }): string {
-  if (p.image) return p.image;
+  if (p.image && !p.image.startsWith("cloud:")) return p.image;
   const n = p.name.toLowerCase();
   if (n.includes("nasi")) return PHOTOS.nasgor;
   if (n.includes("mie")) return PHOTOS.mie;
@@ -48,6 +48,27 @@ export function menuBlurb(p: Product): string {
   if (p.category === "Food") return "Dapur HVEN, porsi sharing.";
   if (p.category === "Water") return "Masih, dingin.";
   return "Menu HVEN Space.";
+}
+
+export function menuPhotoId(productId: string): string {
+  const safe = (productId || "menu").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 70) || "menu";
+  return `${safe}-in`;
+}
+
+export function slimMenuImage(image: string | undefined, productId: string): string | undefined {
+  if (!image) return undefined;
+  if (image.startsWith("data:")) return `cloud:${menuPhotoId(productId)}`;
+  return image;
+}
+
+export function pickMenuImage(a?: string, b?: string): string | undefined {
+  const rank = (s?: string) => {
+    if (!s) return 0;
+    if (s.startsWith("data:")) return 3;
+    if (s.startsWith("cloud:")) return 2;
+    return 1;
+  };
+  return rank(a) >= rank(b) ? a || b : b || a;
 }
 
 export function compressMenuPhoto(src: string, maxW = 480, quality = 0.52): Promise<string> {
