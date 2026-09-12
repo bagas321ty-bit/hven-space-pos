@@ -356,10 +356,37 @@ export const SEED_MONEY: MoneyBooks = { rekening: 921_000, cash: 720_000, sisihG
 export interface LedgerEntry {
   id: string;
   at: string;
-  kind: "setor" | "expense-cash" | "sale-cash" | "void-cash" | "adjust";
+  kind: "setor" | "expense-cash" | "expense-bank" | "expense-sisih" | "sale-cash" | "void-cash" | "sisih-gaji" | "adjust";
   amount: number;
   note: string;
   actor: string;
+}
+
+export const SISIH_ACCRUAL_START = "2026-09-13";
+
+function nextYmd(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + 1));
+  return dt.toISOString().slice(0, 10);
+}
+
+export function accrueSisih(ledger: LedgerEntry[] | undefined, today: string, perDay = SISIH_GAJI_PER_DAY): LedgerEntry[] {
+  const rows = [...(ledger ?? [])];
+  const have = new Set(rows.filter((r) => r.kind === "sisih-gaji").map((r) => r.id));
+  if (today < SISIH_ACCRUAL_START) return rows;
+  for (let d = SISIH_ACCRUAL_START; d <= today; d = nextYmd(d)) {
+    const id = `led-sisih-${d}`;
+    if (have.has(id)) continue;
+    rows.push({
+      id,
+      at: `${d}T17:00:00+07:00`,
+      kind: "sisih-gaji",
+      amount: perDay,
+      note: `Sisih gaji ${d}`,
+      actor: "Sistem",
+    });
+  }
+  return rows;
 }
 
 export function replayMoney(ledger: LedgerEntry[] | undefined, seed: MoneyBooks = SEED_MONEY): MoneyBooks {
@@ -374,6 +401,12 @@ export function replayMoney(ledger: LedgerEntry[] | undefined, seed: MoneyBooks 
       rekening += Math.abs(n);
     } else if (r.kind === "expense-cash") {
       cash += n;
+    } else if (r.kind === "expense-bank") {
+      rekening += n;
+    } else if (r.kind === "expense-sisih") {
+      sisihGajiBank += n;
+    } else if (r.kind === "sisih-gaji") {
+      sisihGajiBank += Math.abs(n);
     } else if (r.kind === "sale-cash") {
       cash += Math.abs(n);
     } else if (r.kind === "void-cash") {

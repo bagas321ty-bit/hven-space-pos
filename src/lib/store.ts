@@ -48,6 +48,7 @@ import {
   normalizeCategoryName,
   normalizeManagerCash,
   replayMoney,
+  accrueSisih,
 } from "@/lib/types";
 import { pickMenuImage } from "@/lib/menu-photos";
 import { FEEDBACK_WAIT_MS, hasKitchenItems } from "@/lib/feedback";
@@ -75,7 +76,7 @@ import { normalizeIngredient } from "@/lib/inventory";
 import { verifyVenueLogin, normalizeVenueEmail } from "@/lib/venue-auth";
 import { ensureBukuUsers, hashPassword, normalizeBukuEmail, SEED_BUKU_USERS, verifyBukuLogin } from "@/lib/buku-auth";
 import { detectWorkShift, ensureWorkShifts, inAbsenWindow, inferShiftId, isLateClockIn, isNightCorruptAttempt, LATE_FINE } from "@/lib/work-shift";
-import { isPriveCat, mergeSheetBooks, SHEET_SYNC } from "@/lib/sheet-books";
+import { isGajiCat, isPriveCat, mergeSheetBooks, SHEET_SYNC } from "@/lib/sheet-books";
 import { slimAttendance } from "@/lib/att-photo-slim";
 import type { WaMode } from "@/lib/whatsapp";
 import type { CloudPayload } from "@/lib/pos-cloud";
@@ -298,6 +299,7 @@ export interface AppState {
   setShiftCashier: (staffId: string) => void;
   setorTunai: (amount: number, note?: string) => string | null;
   adjustMoneyBooks: (patch: Partial<MoneyBooks>, note?: string) => void;
+  ensureSisihAccrual: () => void;
   addStaff: (s: Staff) => void;
   updateStaff: (s: Staff) => void;
   removeStaff: (id: string) => string | null;
@@ -326,6 +328,14 @@ export const SEED_MONEY_BOOKS = SEED_MONEY;
 function appendLedger(prev: LedgerEntry[] | undefined, row: LedgerEntry) {
   const ledger = [row, ...(prev ?? [])];
   return { ledger, moneyBooks: replayMoney(ledger) };
+}
+
+function expenseMoneyKind(e: { category: string; pay?: string; date: string }): "expense-cash" | "expense-bank" | "expense-sisih" | null {
+  if (e.date < "2026-09-12") return null;
+  if (isGajiCat(e.category)) return "expense-sisih";
+  if (e.pay === "Tunai") return "expense-cash";
+  if (e.pay === "Non Tunai") return "expense-bank";
+  return null;
 }
 
 function keepProductMedia(incoming: Product[], prev: Product[]): Product[] {
@@ -1458,11 +1468,12 @@ export const usePos = create<AppState>()(
         }
         let ledger = get().ledger ?? [];
         let moneyBooks = replayMoney(ledger);
-        if (row.date >= "2026-09-12" && row.pay === "Tunai") {
+        const kind = expenseMoneyKind(row);
+        if (kind) {
           const moved = appendLedger(ledger, {
             id: uid("led"),
             at: new Date().toISOString(),
-            kind: "expense-cash",
+            kind,
             amount: -row.amount,
             note: row.desc,
             actor: get().staff.find((s) => s.id === get().currentStaffId)?.name ?? get().bukuSession?.name ?? "Staf",
@@ -1483,26 +1494,29 @@ export const usePos = create<AppState>()(
         if (!row || row.date < "2026-09-12" || row.pay === pay) return;
         let ledger = get().ledger ?? [];
         let moneyBooks = replayMoney(ledger);
-        if (pay === "Tunai" && row.pay !== "Tunai") {
+        const prevKind = expenseMoneyKind(row);
+        const nextKind = expenseMoneyKind({ ...row, pay });
+        const actor = "Koreksi metode";
+        if (prevKind && prevKind !== nextKind) {
           const moved = appendLedger(ledger, {
             id: uid("led"),
             at: new Date().toISOString(),
-            kind: "expense-cash",
-            amount: -row.amount,
+            kind: prevKind,
+            amount: row.amount,
             note: row.desc,
-            actor: "Koreksi metode",
+            actor,
           });
           ledger = moved.ledger;
           moneyBooks = moved.moneyBooks;
         }
-        if (row.pay === "Tunai" && pay !== "Tunai") {
+        if (nextKind && nextKind !== prevKind) {
           const moved = appendLedger(ledger, {
             id: uid("led"),
             at: new Date().toISOString(),
-            kind: "expense-cash",
-            amount: row.amount,
+            kind: nextKind,
+            amount: -row.amount,
             note: row.desc,
-            actor: "Koreksi metode",
+            actor,
           });
           ledger = moved.ledger;
           moneyBooks = moved.moneyBooks;
@@ -1514,11 +1528,12 @@ export const usePos = create<AppState>()(
         const row = get().expenses.find((e) => e.id === id);
         let ledger = get().ledger ?? [];
         let moneyBooks = replayMoney(ledger);
-        if (row && row.date >= "2026-09-12" && row.pay === "Tunai") {
+        const kind = row ? expenseMoneyKind(row) : null;
+        if (row && kind) {
           const moved = appendLedger(ledger, {
             id: uid("led"),
             at: new Date().toISOString(),
-            kind: "expense-cash",
+            kind,
             amount: row.amount,
             note: `Hapus ${row.desc}`,
             actor: "Hapus pengeluaran",
@@ -1867,6 +1882,13 @@ export const usePos = create<AppState>()(
         });
         nudgeCloud();
       },
+      ensureSisihAccrual: () => {
+        const per = get().sisihGajiPerDay || SISIH_GAJI_PER_DAY;
+        const ledger = accrueSisih(get().ledger, todayISO(), per);
+        if (ledger.length === (get().ledger ?? []).length) return;
+        set({ ledger, moneyBooks: replayMoney(ledger) });
+        nudgeCloud();
+      },
       addStaff: (s) => set({ staff: [...get().staff, s] }),
       updateStaff: (s) =>
         set({
@@ -2021,8 +2043,8 @@ export const usePos = create<AppState>()(
           priveWeeklyCap: payload.priveWeeklyCap ?? get().priveWeeklyCap,
           managerCashCap: cap,
           managerCash: (payload.managerCash ?? []).map((r) => normalizeManagerCash(r, cap)),
-          moneyBooks: replayMoney(payload.ledger ?? get().ledger),
-          ledger: payload.ledger ?? get().ledger ?? [],
+          moneyBooks: replayMoney(accrueSisih(payload.ledger ?? get().ledger, todayISO(), payload.sisihGajiPerDay ?? get().sisihGajiPerDay)),
+          ledger: accrueSisih(payload.ledger ?? get().ledger, todayISO(), payload.sisihGajiPerDay ?? get().sisihGajiPerDay),
           workShifts: ensureWorkShifts(payload.workShifts),
           shiftLogs: payload.shiftLogs ?? [],
           cart: Array.isArray(payload.cart) ? payload.cart : get().cart,

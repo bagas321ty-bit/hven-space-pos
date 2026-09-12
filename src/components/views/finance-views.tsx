@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
@@ -495,12 +495,17 @@ export function ExpensesView() {
           <Input type="number" required placeholder="Nominal" value={form.amount || ""} onChange={(e) => { setErr(""); setForm({ ...form, amount: Number(e.target.value) }); }} />
           <Input placeholder="No. nota (opsional)" value={form.nota} onChange={(e) => setForm({ ...form, nota: e.target.value })} />
           {form.date >= "2026-09-12" ? (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-2">
               {(["Tunai", "Non Tunai"] as const).map((m) => (
                 <Button key={m} type="button" variant={form.pay === m ? "default" : "secondary"} className="h-11" onClick={() => setForm({ ...form, pay: m })}>
                   {m}
                 </Button>
               ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Tunai mengurangi laci kasir. Non tunai mengurangi rekening. Gaji mengambil rekening sisih gaji.
+              </p>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">Metode tunai/non tunai berlaku mulai 12 Sep 2026.</p>
@@ -1023,6 +1028,7 @@ export function SisihGajiView() {
   const dailyBooks = usePos((s) => s.dailyBooks);
   const orders = usePos((s) => s.orders);
   const expenses = usePos((s) => s.expenses);
+  const ledger = usePos((s) => s.ledger);
   const sisihGajiPerDay = usePos((s) => s.sisihGajiPerDay);
   const setSisihGajiPerDay = usePos((s) => s.setSisihGajiPerDay);
   const [draft, setDraft] = useState(String(sisihGajiPerDay));
@@ -1057,7 +1063,7 @@ export function SisihGajiView() {
         <div>
           <h2 className="font-display text-xl font-medium">Log sisih gaji & uang kotor</h2>
           <p className="text-sm text-muted-foreground">
-            Tiap hari buka: sisih gaji {formatIDR(sisihGajiPerDay)} + uang kotor (COGS). Laba bersih = omzet − kotor − gaji. Bukan kas keluar — gaji aktual tetap di Log Pengeluaran.
+            Tiap hari buka: sisih gaji {formatIDR(sisihGajiPerDay)} masuk rekening sisih gaji (saldo nyata). Gaji dibayar memotong rekening itu.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1111,9 +1117,10 @@ export function SisihGajiView() {
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi label="Saldo rekening sisih gaji" value={formatIDR(replayMoney(ledger).sisihGajiBank)} hint={`Nyata · +${formatIDR(sisihGajiPerDay)} / hari`} />
         <Kpi label="Omzet periode" value={formatIDRCompact(tot.omzet)} hint={`${shown.length} hari buka`} />
         <Kpi label="Sisih uang kotor" value={formatIDRCompact(tot.uangKotor)} hint="HPP / restok" />
-        <Kpi label="Sisih gaji" value={formatIDRCompact(tot.sisihGaji)} hint={`${shown.length} × ${formatIDR(sisihGajiPerDay)}`} />
+        <Kpi label="Sisih gaji periode" value={formatIDRCompact(tot.sisihGaji)} hint={`${shown.length} × ${formatIDR(sisihGajiPerDay)}`} />
         <Kpi
           label="Laba bersih periode"
           value={formatIDRCompact(tot.labaBersih)}
@@ -1465,6 +1472,7 @@ export function SavingCostView() {
 export function RekeningView() {
   const ledger = usePos((s) => s.ledger);
   const setorTunai = usePos((s) => s.setorTunai);
+  const ensureSisihAccrual = usePos((s) => s.ensureSisihAccrual);
   const books = replayMoney(ledger);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -1473,20 +1481,23 @@ export function RekeningView() {
   const cash = books.cash;
   const sisih = books.sisihGajiBank;
   const rows = [...(ledger ?? [])]
-    .filter((r) => r.kind === "setor" || r.kind === "expense-cash")
+    .filter((r) => r.kind === "setor" || r.kind === "expense-cash" || r.kind === "expense-bank" || r.kind === "expense-sisih" || r.kind === "sisih-gaji")
     .sort((a, b) => (a.at < b.at ? 1 : -1));
+  useEffect(() => {
+    ensureSisihAccrual();
+  }, [ensureSisihAccrual]);
   return (
     <div className="h-full overflow-auto p-4 space-y-4">
       <div>
         <h2 className="font-display text-xl font-medium">Uang rekening</h2>
         <p className="text-sm text-muted-foreground">
-          Saldo toko. Setor manager (tunai) masuk rekening. Kas fisik sama dengan laci kasir.
+          Tunai = laci kasir. Non tunai = rekening. Setor pindah tunai ke rekening. Sisih gaji +{formatIDR(280000)} tiap hari.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <Kpi label="Uang di rekening" value={formatIDR(rekening)} hint="Operasional bank" />
-        <Kpi label="Cash (laci kasir)" value={formatIDR(cash)} hint="Hanya tunai" />
-        <Kpi label="Rekening sisih gaji" value={formatIDR(sisih)} hint="Cadangan gaji" />
+        <Kpi label="Uang di rekening" value={formatIDR(rekening)} hint="Operasional bank · non tunai keluar dari sini" />
+        <Kpi label="Cash (laci kasir)" value={formatIDR(cash)} hint="Penjualan tunai − pengeluaran tunai − setor" />
+        <Kpi label="Rekening sisih gaji" value={formatIDR(sisih)} hint="Saldo nyata · +280rb / hari" />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <form
@@ -1541,7 +1552,19 @@ export function RekeningView() {
                 rows.map((r) => (
                   <tr key={r.id} className="border-t border-border">
                     <td className="px-3 py-2 font-mono text-xs">{formatDateID(r.at.slice(0, 10))}</td>
-                    <td className="px-3 py-2">{r.kind === "setor" ? "Setor" : r.kind === "expense-cash" ? "Keluar tunai" : r.kind}</td>
+                    <td className="px-3 py-2">
+                      {r.kind === "setor"
+                        ? "Setor ke rekening"
+                        : r.kind === "expense-cash"
+                          ? "Keluar tunai"
+                          : r.kind === "expense-bank"
+                            ? "Keluar non tunai"
+                            : r.kind === "expense-sisih"
+                              ? "Bayar gaji"
+                              : r.kind === "sisih-gaji"
+                                ? "Sisih gaji harian"
+                                : r.kind}
+                    </td>
                     <td className="px-3 py-2 font-mono tabular-nums">{formatIDR(r.amount)}</td>
                     <td className="px-3 py-2">{r.actor}</td>
                     <td className="px-3 py-2 text-muted-foreground">{r.note}</td>

@@ -133,6 +133,7 @@ export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local")
     } else if (reason === "manual") {
       usePos.getState().setCloudMeta({ cloudStatus: "ok", cloudError: "" });
     }
+    usePos.getState().ensureSisihAccrual();
   } catch (err) {
     usePos.getState().setCloudMeta({
       cloudStatus: "error",

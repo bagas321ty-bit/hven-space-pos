@@ -8,6 +8,7 @@ export function HydratePos() {
     const finish = () => {
       usePos.setState({ hydrated: true });
       usePos.getState().purgeTestData();
+      usePos.getState().ensureSisihAccrual();
     };
     try {
       const result = usePos.persist.rehydrate();
