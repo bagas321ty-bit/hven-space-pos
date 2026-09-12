@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import socket
 import sys
@@ -10,13 +11,12 @@ import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.parse import unquote
 
 PORT = int(os.environ.get("HVEN_CLOUD_PORT", "8787"))
-VERCEL = os.environ.get("HVEN_POS_UI", "https://hven-space-pos-bagas321ty-1278.vercel.app").rstrip("/")
 TOKEN = "aacdfc2728ad029ce31fe891ec1b03bb3a3278006507652adc60ea699da549ed"
 ROOT = Path(__file__).resolve().parent
+UI = ROOT / "ui"
 DATA = ROOT / "data"
 SNAP = DATA / "snapshot.json"
 PHOTOS = DATA / "photos"
@@ -203,7 +203,8 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
-    def do_GET(self) -> None:
+    def do_HEAD(self) -> None:
+        self.do_GET()
         path = self.path.split("?", 1)[0]
         if path in ("/hven-cloud", "/hven-cloud/", "/health"):
             return self._status()
@@ -214,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"ok":false,"error":"Gunakan POST."}')
             return
-        self._proxy()
+        return self._static(path)
 
     def do_POST(self) -> None:
         path = self.path.split("?", 1)[0]
@@ -343,38 +344,32 @@ a{{color:#c4a574}} card{{display:block}}
         self.end_headers()
         self.wfile.write(raw)
 
-    def _proxy(self) -> None:
-        target = VERCEL + self.path
-        headers = {
-            "User-Agent": self.headers.get("User-Agent") or "HVEN-Cloud",
-            "Accept": self.headers.get("Accept") or "*/*",
-            "Accept-Language": self.headers.get("Accept-Language") or "id",
-        }
-        req = Request(target, headers=headers, method="GET")
-        try:
-            with urlopen(req, timeout=25) as resp:
-                body = resp.read()
-                self.send_response(resp.status)
-                ct = resp.headers.get("Content-Type") or "application/octet-stream"
-                self.send_header("Content-Type", ct)
-                self.send_header("Cache-Control", resp.headers.get("Cache-Control") or "public, max-age=60")
-                self._cors()
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-        except HTTPError as err:
-            body = err.read()
-            self.send_response(err.code)
-            self.send_header("Content-Type", err.headers.get("Content-Type") or "text/plain")
-            self._cors()
-            self.send_header("Content-Length", str(len(body)))
+    def _static(self, path: str) -> None:
+        rel = unquote(path.lstrip("/")) or "index.html"
+        if any(p == ".." for p in rel.split("/")):
+            self.send_response(400)
             self.end_headers()
-            self.wfile.write(body)
-        except URLError:
+            return
+        target = (UI / rel).resolve()
+        try:
+            target.relative_to(UI.resolve())
+        except ValueError:
+            self.send_response(400)
+            self.end_headers()
+            return
+        if target.is_dir():
+            target = target / "index.html"
+        if not target.is_file():
+            if "." in Path(rel).name:
+                self.send_response(404)
+                self._cors()
+                self.end_headers()
+                return
+            target = UI / "index.html"
+        if not target.is_file():
             msg = (
                 "<!doctype html><meta charset=utf-8><body style='font-family:sans-serif;padding:2rem'>"
-                "<h1>HVEN Cloud hidup</h1><p>Tampilan POS belum terambil. Buka "
-                f"<a href='{VERCEL}'>{VERCEL}</a> atau muat ulang.</p></body>"
+                "<h1>HVEN Cloud hidup</h1><p>Tampilan POS belum diunggah ke VPS.</p></body>"
             ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -382,6 +377,23 @@ a{{color:#c4a574}} card{{display:block}}
             self.send_header("Content-Length", str(len(msg)))
             self.end_headers()
             self.wfile.write(msg)
+            return
+        data = target.read_bytes()
+        ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        if target.suffix == ".js":
+            ctype = "text/javascript; charset=utf-8"
+        elif target.suffix == ".css":
+            ctype = "text/css; charset=utf-8"
+        elif target.suffix == ".svg":
+            ctype = "image/svg+xml"
+        cache = "no-store" if target.name == "index.html" else "public, max-age=86400"
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", cache)
+        self._cors()
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
 
 def main() -> None:
