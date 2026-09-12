@@ -51,8 +51,7 @@ import { formatDateID, formatIDR, formatTimeID, todayISO } from "@/lib/format";
 import { playKdsChime } from "@/lib/kds-chime";
 import { isIngredientLow } from "@/lib/inventory";
 import { usePos } from "@/lib/store";
-import type { ViewId } from "@/lib/types";
-import { RESTRICTED_VIEWS } from "@/lib/types";
+import { RESTRICTED_VIEWS, replayMoney, type ViewId } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { CloudSyncBadge } from "@/components/cloud-sync";
 import { FeedbackLock } from "@/components/feedback-overlay";
@@ -178,7 +177,7 @@ export function AppShell() {
   const inventory = usePos((s) => s.inventory);
   const notifs = usePos((s) => s.notifications);
   const shift = usePos((s) => s.shift);
-  const cashNow = usePos((s) => s.moneyBooks?.cash ?? 0);
+  const cashNow = replayMoney(usePos((s) => s.ledger)).cash;
   const setProductFormOpen = usePos((s) => s.setProductFormOpen);
   const setPaymentOpen = usePos((s) => s.setPaymentOpen);
   const clearCart = usePos((s) => s.clearCart);

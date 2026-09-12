@@ -30,6 +30,7 @@ import {
   SISIH_OPS_PER_DAY,
   splitManagerCash,
   normalizeManagerCash,
+  replayMoney,
   type MoneyInRow,
   type Quadrant,
 } from "@/lib/types";
@@ -1453,17 +1454,18 @@ export function SavingCostView() {
 }
 
 export function RekeningView() {
-  const books = usePos((s) => s.moneyBooks);
   const ledger = usePos((s) => s.ledger);
   const setorTunai = usePos((s) => s.setorTunai);
-  const adjustMoneyBooks = usePos((s) => s.adjustMoneyBooks);
+  const books = replayMoney(ledger);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const rekening = books?.rekening ?? 921000;
-  const cash = books?.cash ?? 720000;
-  const sisih = books?.sisihGajiBank ?? 1400000;
-  const rows = [...(ledger ?? [])].sort((a, b) => (a.at < b.at ? 1 : -1));
+  const rekening = books.rekening;
+  const cash = books.cash;
+  const sisih = books.sisihGajiBank;
+  const rows = [...(ledger ?? [])]
+    .filter((r) => r.kind === "setor" || r.kind === "expense-cash")
+    .sort((a, b) => (a.at < b.at ? 1 : -1));
   return (
     <div className="h-full overflow-auto p-4 space-y-4">
       <div>

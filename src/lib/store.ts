@@ -43,9 +43,11 @@ import {
   SISIH_GAJI_PER_DAY,
   SISIH_OPS_PER_DAY,
   TAX_RATE,
+  SEED_MONEY,
   ensureMenuCategories,
   normalizeCategoryName,
   normalizeManagerCash,
+  replayMoney,
 } from "@/lib/types";
 import { FEEDBACK_WAIT_MS, hasKitchenItems } from "@/lib/feedback";
 import {
@@ -316,15 +318,11 @@ function lineTotal(item: CartItem): number {
   return (item.price + add) * item.qty;
 }
 
-export const SEED_MONEY: MoneyBooks = { rekening: 921_000, cash: 720_000, sisihGajiBank: 1_400_000 };
+export const SEED_MONEY_BOOKS = SEED_MONEY;
 
-function ensureBooks(b?: MoneyBooks | null): MoneyBooks {
-  if (!b || typeof b.rekening !== "number") return { ...SEED_MONEY };
-  return {
-    rekening: Math.max(0, Math.round(Number(b.rekening) || 0)),
-    cash: Math.max(0, Math.round(Number(b.cash) || 0)),
-    sisihGajiBank: Math.max(0, Math.round(Number(b.sisihGajiBank) || 0)),
-  };
+function appendLedger(prev: LedgerEntry[] | undefined, row: LedgerEntry) {
+  const ledger = [row, ...(prev ?? [])];
+  return { ledger, moneyBooks: replayMoney(ledger) };
 }
 
 function keepProductMedia(incoming: Product[], prev: Product[]): Product[] {
@@ -894,8 +892,20 @@ export const usePos = create<AppState>()(
         const shift = { ...get().shift, open: true };
         if (method === "Cash") shift.cashSales += t.total;
         else shift.nonCashSales += t.total;
-        const books = ensureBooks(get().moneyBooks);
-        if (method === "Cash") books.cash += t.total;
+        let ledger = get().ledger ?? [];
+        let moneyBooks = replayMoney(ledger);
+        if (method === "Cash") {
+          const moved = appendLedger(ledger, {
+            id: uid("led"),
+            at: stamp,
+            kind: "sale-cash",
+            amount: t.total,
+            note: `Penjualan ${order.number}`,
+            actor: cashier,
+          });
+          ledger = moved.ledger;
+          moneyBooks = moved.moneyBooks;
+        }
         const cups = cart.reduce((s, c) => s + c.qty, 0);
         const dailySales = [...get().dailySales];
         const today = todayISO();
@@ -986,7 +996,8 @@ export const usePos = create<AppState>()(
           table: "",
           openBillId: null,
           shift,
-          moneyBooks: books,
+          moneyBooks,
+          ledger,
           lastReceipt: order,
           paymentOpen: false,
           receiptOpen: true,
@@ -1090,8 +1101,20 @@ export const usePos = create<AppState>()(
         const shift = { ...get().shift, open: true };
         if (o.payment === "Cash") shift.cashSales += o.total;
         else shift.nonCashSales += o.total;
-        const books = ensureBooks(get().moneyBooks);
-        if (o.payment === "Cash") books.cash += o.total;
+        let ledger = get().ledger ?? [];
+        let moneyBooks = replayMoney(ledger);
+        if (o.payment === "Cash") {
+          const moved = appendLedger(ledger, {
+            id: uid("led"),
+            at: stamp,
+            kind: "sale-cash",
+            amount: o.total,
+            note: `Penjualan ${paid.number}`,
+            actor: cashier,
+          });
+          ledger = moved.ledger;
+          moneyBooks = moved.moneyBooks;
+        }
         const dailySales = [...get().dailySales];
         const today = todayISO();
         const row = dailySales.find((d) => d.date === today);
@@ -1102,7 +1125,8 @@ export const usePos = create<AppState>()(
           products: nextProducts,
           inventory: deductRecipes(get().inventory, o.items, get().recipes),
           shift,
-          moneyBooks: books,
+          moneyBooks,
+          ledger,
           lastReceipt: paid,
           dailySales,
           notifications: [
@@ -1253,13 +1277,21 @@ export const usePos = create<AppState>()(
           set({ pinOpen: true, pendingView: get().view });
           return;
         }
-        const books = ensureBooks(get().moneyBooks);
-        if (target?.status === "paid" && target.payment === "Cash") {
-          books.cash = Math.max(0, books.cash - target.total);
-        }
+        const extra =
+          target?.status === "paid" && target.payment === "Cash"
+            ? appendLedger(get().ledger, {
+                id: uid("led"),
+                at: new Date().toISOString(),
+                kind: "void-cash",
+                amount: target.total,
+                note: `Void ${target.number}`,
+                actor: get().staff.find((s) => s.id === get().currentStaffId)?.name ?? "Owner",
+              })
+            : { ledger: get().ledger ?? [], moneyBooks: replayMoney(get().ledger) };
         set({
           orders: get().orders.map((o) => (o.id === id ? { ...o, status: "void", kdsStatus: "done" } : o)),
-          moneyBooks: books,
+          moneyBooks: extra.moneyBooks,
+          ledger: extra.ledger,
         });
       },
       setKds: (id, status) => {
@@ -1296,10 +1328,19 @@ export const usePos = create<AppState>()(
         const wasCash = o.payment === "Cash";
         const isCash = method === "Cash";
         let shift = get().shift;
-        const books = ensureBooks(get().moneyBooks);
+        let ledger = get().ledger ?? [];
+        let moneyBooks = replayMoney(ledger);
         if (wasCash !== isCash) {
-          if (isCash) books.cash += o.total;
-          else books.cash = Math.max(0, books.cash - o.total);
+          const moved = appendLedger(ledger, {
+            id: uid("led"),
+            at: stamp,
+            kind: isCash ? "sale-cash" : "void-cash",
+            amount: o.total,
+            note: `Ubah bayar ${o.number} → ${method}`,
+            actor,
+          });
+          ledger = moved.ledger;
+          moneyBooks = moved.moneyBooks;
         }
         if (wasCash !== isCash && shift.open && shiftDateISO(o.createdAt) === todayISO()) {
           shift = { ...shift };
@@ -1320,7 +1361,8 @@ export const usePos = create<AppState>()(
         set({
           orders,
           shift,
-          moneyBooks: books,
+          moneyBooks,
+          ledger,
           lastReceipt,
           audit: [
             {
@@ -1409,11 +1451,10 @@ export const usePos = create<AppState>()(
         if (get().expenses.some((x) => expenseKey(x) === key)) {
           return "Pengeluaran yang sama sudah tercatat. Tidak disimpan ulang.";
         }
-        const books = ensureBooks(get().moneyBooks);
-        const ledger = [...(get().ledger ?? [])];
+        let ledger = get().ledger ?? [];
+        let moneyBooks = replayMoney(ledger);
         if (row.date >= "2026-09-12" && row.pay === "Tunai") {
-          books.cash = Math.max(0, books.cash - row.amount);
-          ledger.unshift({
+          const moved = appendLedger(ledger, {
             id: uid("led"),
             at: new Date().toISOString(),
             kind: "expense-cash",
@@ -1421,10 +1462,12 @@ export const usePos = create<AppState>()(
             note: row.desc,
             actor: get().staff.find((s) => s.id === get().currentStaffId)?.name ?? get().bukuSession?.name ?? "Staf",
           });
+          ledger = moved.ledger;
+          moneyBooks = moved.moneyBooks;
         }
         set({
           expenses: [row, ...get().expenses],
-          moneyBooks: books,
+          moneyBooks,
           ledger,
         });
         nudgeCloud();
@@ -1433,17 +1476,52 @@ export const usePos = create<AppState>()(
       setExpensePay: (id, pay) => {
         const row = get().expenses.find((e) => e.id === id);
         if (!row || row.date < "2026-09-12" || row.pay === pay) return;
-        const books = ensureBooks(get().moneyBooks);
-        if (pay === "Tunai" && row.pay !== "Tunai") books.cash = Math.max(0, books.cash - row.amount);
-        if (row.pay === "Tunai" && pay !== "Tunai") books.cash += row.amount;
-        set({ expenses: get().expenses.map((e) => (e.id === id ? { ...e, pay } : e)), moneyBooks: books });
+        let ledger = get().ledger ?? [];
+        let moneyBooks = replayMoney(ledger);
+        if (pay === "Tunai" && row.pay !== "Tunai") {
+          const moved = appendLedger(ledger, {
+            id: uid("led"),
+            at: new Date().toISOString(),
+            kind: "expense-cash",
+            amount: -row.amount,
+            note: row.desc,
+            actor: "Koreksi metode",
+          });
+          ledger = moved.ledger;
+          moneyBooks = moved.moneyBooks;
+        }
+        if (row.pay === "Tunai" && pay !== "Tunai") {
+          const moved = appendLedger(ledger, {
+            id: uid("led"),
+            at: new Date().toISOString(),
+            kind: "expense-cash",
+            amount: row.amount,
+            note: row.desc,
+            actor: "Koreksi metode",
+          });
+          ledger = moved.ledger;
+          moneyBooks = moved.moneyBooks;
+        }
+        set({ expenses: get().expenses.map((e) => (e.id === id ? { ...e, pay } : e)), moneyBooks, ledger });
         nudgeCloud();
       },
       deleteExpense: (id) => {
         const row = get().expenses.find((e) => e.id === id);
-        const books = ensureBooks(get().moneyBooks);
-        if (row && row.date >= "2026-09-12" && row.pay === "Tunai") books.cash += row.amount;
-        set({ expenses: get().expenses.filter((e) => e.id !== id), moneyBooks: books });
+        let ledger = get().ledger ?? [];
+        let moneyBooks = replayMoney(ledger);
+        if (row && row.date >= "2026-09-12" && row.pay === "Tunai") {
+          const moved = appendLedger(ledger, {
+            id: uid("led"),
+            at: new Date().toISOString(),
+            kind: "expense-cash",
+            amount: row.amount,
+            note: `Hapus ${row.desc}`,
+            actor: "Hapus pengeluaran",
+          });
+          ledger = moved.ledger;
+          moneyBooks = moved.moneyBooks;
+        }
+        set({ expenses: get().expenses.filter((e) => e.id !== id), moneyBooks, ledger });
         nudgeCloud();
       },
       addIncome: (e) => {
@@ -1741,42 +1819,37 @@ export const usePos = create<AppState>()(
       setorTunai: (amount, note) => {
         const n = Math.round(Number(amount) || 0);
         if (n <= 0) return "Nominal setor tidak valid.";
-        const books = ensureBooks(get().moneyBooks);
-        if (n > books.cash) return `Kas tunai hanya ${formatIDR(books.cash)}.`;
+        const now = replayMoney(get().ledger);
+        if (n > now.cash) return `Kas tunai hanya ${formatIDR(now.cash)}.`;
         const actor = get().bukuSession?.name ?? get().staff.find((s) => s.id === get().currentStaffId)?.name ?? "Manager";
-        books.cash -= n;
-        books.rekening += n;
-        const row: LedgerEntry = {
+        const moved = appendLedger(get().ledger, {
           id: uid("led"),
           at: new Date().toISOString(),
           kind: "setor",
           amount: n,
           note: note?.trim() || "Setor tunai ke rekening",
           actor,
-        };
+        });
         set({
-          moneyBooks: books,
-          ledger: [row, ...(get().ledger ?? [])],
+          moneyBooks: moved.moneyBooks,
+          ledger: moved.ledger,
         });
         nudgeCloud();
         return null;
       },
       adjustMoneyBooks: (patch, note) => {
-        const books = { ...ensureBooks(get().moneyBooks), ...patch };
         const actor = get().bukuSession?.name ?? "Owner";
+        const moved = appendLedger(get().ledger, {
+          id: uid("led"),
+          at: new Date().toISOString(),
+          kind: "adjust",
+          amount: 0,
+          note: note?.trim() || "Koreksi saldo",
+          actor,
+        });
         set({
-          moneyBooks: ensureBooks(books),
-          ledger: [
-            {
-              id: uid("led"),
-              at: new Date().toISOString(),
-              kind: "adjust",
-              amount: 0,
-              note: note?.trim() || "Koreksi saldo",
-              actor,
-            },
-            ...(get().ledger ?? []),
-          ],
+          moneyBooks: { ...replayMoney(moved.ledger), ...patch },
+          ledger: moved.ledger,
         });
         nudgeCloud();
       },
@@ -1930,7 +2003,7 @@ export const usePos = create<AppState>()(
           priveWeeklyCap: payload.priveWeeklyCap ?? get().priveWeeklyCap,
           managerCashCap: cap,
           managerCash: (payload.managerCash ?? []).map((r) => normalizeManagerCash(r, cap)),
-          moneyBooks: ensureBooks(payload.moneyBooks ?? get().moneyBooks),
+          moneyBooks: replayMoney(payload.ledger ?? get().ledger),
           ledger: payload.ledger ?? get().ledger ?? [],
           workShifts: ensureWorkShifts(payload.workShifts),
           shiftLogs: payload.shiftLogs ?? [],
@@ -1978,7 +2051,7 @@ export const usePos = create<AppState>()(
                 normalizeManagerCash(r, typeof p.managerCashCap === "number" && p.managerCashCap >= 0 ? p.managerCashCap : MANAGER_CASH_CAP),
               )
             : [],
-          moneyBooks: ensureBooks(p.moneyBooks),
+          moneyBooks: replayMoney(Array.isArray(p.ledger) ? p.ledger : []),
           ledger: Array.isArray(p.ledger) ? p.ledger : [],
           workShifts: ensureWorkShifts(p.workShifts && p.workShifts.length ? p.workShifts : WORK_SHIFTS),
           shiftLogs: p.shiftLogs ?? [],

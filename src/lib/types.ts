@@ -351,6 +351,8 @@ export interface MoneyBooks {
   sisihGajiBank: number;
 }
 
+export const SEED_MONEY: MoneyBooks = { rekening: 921_000, cash: 720_000, sisihGajiBank: 1_400_000 };
+
 export interface LedgerEntry {
   id: string;
   at: string;
@@ -358,6 +360,31 @@ export interface LedgerEntry {
   amount: number;
   note: string;
   actor: string;
+}
+
+export function replayMoney(ledger: LedgerEntry[] | undefined, seed: MoneyBooks = SEED_MONEY): MoneyBooks {
+  let rekening = seed.rekening;
+  let cash = seed.cash;
+  let sisihGajiBank = seed.sisihGajiBank;
+  const rows = [...(ledger ?? [])].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  for (const r of rows) {
+    const n = Math.round(Number(r.amount) || 0);
+    if (r.kind === "setor") {
+      cash -= Math.abs(n);
+      rekening += Math.abs(n);
+    } else if (r.kind === "expense-cash") {
+      cash += n;
+    } else if (r.kind === "sale-cash") {
+      cash += Math.abs(n);
+    } else if (r.kind === "void-cash") {
+      cash -= Math.abs(n);
+    }
+  }
+  return {
+    rekening: Math.max(0, Math.round(rekening)),
+    cash: Math.max(0, Math.round(cash)),
+    sisihGajiBank: Math.max(0, Math.round(sisihGajiBank)),
+  };
 }
 
 export interface ManagerCashLog {

@@ -25,6 +25,7 @@ import type {
   MoneyBooks,
   LedgerEntry,
 } from "@/lib/types";
+import { SEED_MONEY, replayMoney } from "@/lib/types";
 import type { WaMode } from "@/lib/whatsapp";
 import { SAMPLE_ORDERS, PRODUCTS } from "@/data/seed";
 import { slimAttendance } from "@/lib/att-photo-slim";
@@ -331,8 +332,8 @@ export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudP
     managerCash: unionById(local.managerCash, remote.managerCash, (a, b) =>
       (a.deposited ?? 0) >= (b.deposited ?? 0) ? a : b,
     ),
-    moneyBooks: pickBooks(local.moneyBooks, remote.moneyBooks, preferLocal),
     ledger: unionById(local.ledger, remote.ledger, (a, b) => a).slice(0, 400),
+    moneyBooks: replayMoney(unionById(local.ledger, remote.ledger, (a, b) => a)),
     workShifts: unionById(local.workShifts, remote.workShifts, (a, b) => (preferLocal ? a : b)),
     shiftLogs: unionById(local.shiftLogs, remote.shiftLogs, (a, b) => a).slice(0, 200),
     ...mergeCartFields(local, remote),
@@ -390,7 +391,7 @@ export function extractPayload(s: CloudPayload): CloudPayload {
     priveWeeklyCap: s.priveWeeklyCap,
     managerCashCap: s.managerCashCap,
     managerCash: s.managerCash,
-    moneyBooks: s.moneyBooks ?? { rekening: 921000, cash: 720000, sisihGajiBank: 1400000 },
+    moneyBooks: replayMoney(s.ledger ?? []),
     ledger: s.ledger ?? [],
     workShifts: s.workShifts,
     shiftLogs: s.shiftLogs,

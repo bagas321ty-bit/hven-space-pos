@@ -11,7 +11,7 @@ import { HISTORIC_ORDER_IDS, VENUE_EXTRAS, VENUE_PACKAGES } from "@/data/seed";
 import { formatDateID, formatIDR, formatTimeID, hourJakarta, shiftDateISO, todayISO } from "@/lib/format";
 import { feedbackRemainingMs, formatRemain } from "@/lib/feedback";
 import { usePos } from "@/lib/store";
-import { DAILY_TARGET, PAYMENT_METHODS, type Attendance, type KdsStatus, type PaymentMethod, type WorkShift } from "@/lib/types";
+import { DAILY_TARGET, PAYMENT_METHODS, replayMoney, type Attendance, type KdsStatus, type PaymentMethod, type WorkShift } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { detectWorkShift, isNightCorruptAttempt, shiftRangeLabel, workRangeLabel } from "@/lib/work-shift";
 import { photoKey, putAttendanceProof, rasterElement, resolveProof, toAttendanceProof } from "@/lib/att-photo";
@@ -931,10 +931,10 @@ export function ShiftView() {
   const staff = usePos((s) => s.staff);
   const currentStaffId = usePos((s) => s.currentStaffId);
   const setShiftCashier = usePos((s) => s.setShiftCashier);
-  const moneyBooks = usePos((s) => s.moneyBooks);
+  const ledger = usePos((s) => s.ledger);
   const [cashierId, setCashierId] = useState(currentStaffId);
   const floor = staff.filter((s) => s.active);
-  const cashNow = moneyBooks?.cash ?? 0;
+  const cashNow = replayMoney(ledger).cash;
   return (
     <div className="h-full overflow-auto p-4 space-y-4">
       <h2 className="font-display text-xl font-medium">Shift Kasir</h2>
