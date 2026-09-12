@@ -25,7 +25,7 @@ NAME = os.environ.get("HVEN_CLOUD_NAME") or socket.gethostname() or "hven-cloud"
 LIST_KEYS = (
     "products", "orders", "expenses", "incomes", "incidents", "inventory",
     "staff", "attendance", "notifications", "audit", "adjustLogs", "bukuUsers",
-    "managerCash", "workShifts", "shiftLogs",
+    "managerCash", "workShifts", "shiftLogs", "ledger",
 )
 
 

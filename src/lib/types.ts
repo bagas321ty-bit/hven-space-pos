@@ -344,6 +344,21 @@ export const SISIH_OPS_PER_DAY = 200_000;
 export const PRIVE_WEEKLY_CAP = 1_500_000;
 export const MANAGER_CASH_CAP = 200_000;
 
+export interface MoneyBooks {
+  rekening: number;
+  cash: number;
+  sisihGajiBank: number;
+}
+
+export interface LedgerEntry {
+  id: string;
+  at: string;
+  kind: "setor" | "expense-cash" | "sale-cash" | "void-cash" | "adjust";
+  amount: number;
+  note: string;
+  actor: string;
+}
+
 export interface ManagerCashLog {
   id: string;
   date: string;

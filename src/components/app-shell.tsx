@@ -178,6 +178,7 @@ export function AppShell() {
   const inventory = usePos((s) => s.inventory);
   const notifs = usePos((s) => s.notifications);
   const shift = usePos((s) => s.shift);
+  const cashNow = usePos((s) => s.moneyBooks?.cash ?? 0);
   const setProductFormOpen = usePos((s) => s.setProductFormOpen);
   const setPaymentOpen = usePos((s) => s.setPaymentOpen);
   const clearCart = usePos((s) => s.clearCart);
@@ -362,7 +363,7 @@ export function AppShell() {
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{TITLES[view]}</p>
             <p className="hidden text-xs text-muted-foreground sm:block">
-              {shift.open ? "Shift aktif" : "Shift tutup"} • {shift.cashier || me?.name} • {formatDateID(todayISO())} 07.00–02.00
+              {shift.cashier || me?.name} • kas {formatIDR(cashNow)}
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">

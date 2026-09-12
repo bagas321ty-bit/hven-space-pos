@@ -26,6 +26,7 @@ import {
   IncomeView,
   MenuEngView,
   MoneyInView,
+  RekeningView,
   SavingCostView,
   SisihGajiView,
   TargetView,
@@ -44,6 +45,7 @@ type BukuView =
   | "expenses"
   | "income"
   | "moneyin"
+  | "rekening"
   | "sisih"
   | "saving"
   | "cashflow"
@@ -59,6 +61,7 @@ const NAV: { id: BukuView; label: string; icon: typeof Landmark; superOnly?: boo
   { id: "expenses", label: "Log Pengeluaran", icon: Wallet },
   { id: "income", label: "Log Pemasukan", icon: Landmark },
   { id: "moneyin", label: "Uang masuk", icon: ArrowDownUp },
+  { id: "rekening", label: "Uang rekening", icon: Landmark },
   { id: "sisih", label: "Log sisih gaji", icon: PiggyBank },
   { id: "saving", label: "Log saving cost", icon: Vault },
   { id: "cashflow", label: "Arus kas & prive", icon: Coins },
@@ -139,6 +142,7 @@ export function BukuShell() {
           {view === "expenses" && <ExpensesView />}
           {view === "income" && <IncomeView />}
           {view === "moneyin" && <MoneyInView />}
+          {view === "rekening" && <RekeningView />}
           {view === "sisih" && <SisihGajiView />}
           {view === "saving" && <SavingCostView />}
           {view === "cashflow" && <CashFlowView />}

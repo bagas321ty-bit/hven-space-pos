@@ -1451,3 +1451,96 @@ export function SavingCostView() {
     </div>
   );
 }
+
+export function RekeningView() {
+  const books = usePos((s) => s.moneyBooks);
+  const ledger = usePos((s) => s.ledger);
+  const setorTunai = usePos((s) => s.setorTunai);
+  const adjustMoneyBooks = usePos((s) => s.adjustMoneyBooks);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const rekening = books?.rekening ?? 921000;
+  const cash = books?.cash ?? 720000;
+  const sisih = books?.sisihGajiBank ?? 1400000;
+  const rows = [...(ledger ?? [])].sort((a, b) => (a.at < b.at ? 1 : -1));
+  return (
+    <div className="h-full overflow-auto p-4 space-y-4">
+      <div>
+        <h2 className="font-display text-xl font-medium">Uang rekening</h2>
+        <p className="text-sm text-muted-foreground">
+          Saldo toko. Setor manager (tunai) masuk rekening. Kas fisik sama dengan laci kasir.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Kpi label="Uang di rekening" value={formatIDR(rekening)} hint="Operasional bank" />
+        <Kpi label="Cash (laci kasir)" value={formatIDR(cash)} hint="Hanya tunai" />
+        <Kpi label="Rekening sisih gaji" value={formatIDR(sisih)} hint="Cadangan gaji" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <form
+          className="space-y-2 rounded-xl border border-border bg-card p-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const n = Number(amount.replace(/\D/g, "") || 0);
+            setSaving(true);
+            const msg = setorTunai(n, note);
+            if (msg) toast.error(msg);
+            else {
+              toast.success(`Setor ${formatIDR(n)} masuk rekening`);
+              setAmount("");
+              setNote("");
+              await runCloudSync("local");
+            }
+            setSaving(false);
+          }}
+        >
+          <p className="text-sm font-medium">Uang setor (manager)</p>
+          <p className="text-xs text-muted-foreground">Ambil tunai dari laci, masuk rekening.</p>
+          <Input
+            inputMode="numeric"
+            placeholder="Nominal tunai"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/\D/g, ""))}
+          />
+          <Input placeholder="Catatan (opsional)" value={note} onChange={(e) => setNote(e.target.value)} />
+          <Button type="submit" className="h-11 w-full" disabled={saving || !amount}>
+            Setor ke rekening
+          </Button>
+        </form>
+        <div className="lg:col-span-2 overflow-auto rounded-xl border border-border">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-muted text-xs uppercase text-muted-foreground">
+              <tr>
+                {["Waktu", "Jenis", "Nominal", "Oleh", "Catatan"].map((h) => (
+                  <th key={h} className="px-3 py-2">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                    Belum ada setoran.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id} className="border-t border-border">
+                    <td className="px-3 py-2 font-mono text-xs">{formatDateID(r.at.slice(0, 10))}</td>
+                    <td className="px-3 py-2">{r.kind === "setor" ? "Setor" : r.kind === "expense-cash" ? "Keluar tunai" : r.kind}</td>
+                    <td className="px-3 py-2 font-mono tabular-nums">{formatIDR(r.amount)}</td>
+                    <td className="px-3 py-2">{r.actor}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{r.note}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

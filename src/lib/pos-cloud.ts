@@ -22,6 +22,8 @@ import type {
   WorkShift,
   ShiftChangeLog,
   CartItem,
+  MoneyBooks,
+  LedgerEntry,
 } from "@/lib/types";
 import type { WaMode } from "@/lib/whatsapp";
 import { SAMPLE_ORDERS, PRODUCTS } from "@/data/seed";
@@ -65,6 +67,8 @@ export interface CloudPayload {
   priveWeeklyCap: number;
   managerCashCap: number;
   managerCash: ManagerCashLog[];
+  moneyBooks?: MoneyBooks;
+  ledger?: LedgerEntry[];
   workShifts: WorkShift[];
   shiftLogs: ShiftChangeLog[];
   cart: CartItem[];
@@ -214,6 +218,13 @@ function pickScalar<T>(local: T, remote: T, preferLocal: boolean): T {
   return preferLocal ? local : remote;
 }
 
+function pickBooks(local?: MoneyBooks, remote?: MoneyBooks, preferLocal = true): MoneyBooks {
+  const fallback: MoneyBooks = { rekening: 921_000, cash: 720_000, sisihGajiBank: 1_400_000 };
+  const a = local && typeof local.rekening === "number" ? local : fallback;
+  const b = remote && typeof remote.rekening === "number" ? remote : fallback;
+  return preferLocal ? a : b;
+}
+
 export function expenseKey(e: Expense): string {
   return [
     e.date,
@@ -303,6 +314,8 @@ export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudP
     managerCash: unionById(local.managerCash, remote.managerCash, (a, b) =>
       (a.deposited ?? 0) >= (b.deposited ?? 0) ? a : b,
     ),
+    moneyBooks: pickBooks(local.moneyBooks, remote.moneyBooks, preferLocal),
+    ledger: unionById(local.ledger, remote.ledger, (a, b) => a).slice(0, 400),
     workShifts: unionById(local.workShifts, remote.workShifts, (a, b) => (preferLocal ? a : b)),
     shiftLogs: unionById(local.shiftLogs, remote.shiftLogs, (a, b) => a).slice(0, 200),
     ...mergeCartFields(local, remote),
@@ -360,6 +373,8 @@ export function extractPayload(s: CloudPayload): CloudPayload {
     priveWeeklyCap: s.priveWeeklyCap,
     managerCashCap: s.managerCashCap,
     managerCash: s.managerCash,
+    moneyBooks: s.moneyBooks ?? { rekening: 921000, cash: 720000, sisihGajiBank: 1400000 },
+    ledger: s.ledger ?? [],
     workShifts: s.workShifts,
     shiftLogs: s.shiftLogs,
     cart: s.cart ?? [],
@@ -377,6 +392,8 @@ export function payloadFingerprint(p: CloudPayload): string {
     exp,
     inc,
     cash,
+    `${p.moneyBooks?.rekening ?? 0}:${p.moneyBooks?.cash ?? 0}:${p.moneyBooks?.sisihGajiBank ?? 0}`,
+    (p.ledger ?? []).map((l) => l.id).join(","),
     p.attendance.length,
     p.menuCategories.join(","),
     p.shift.open ? "1" : "0",

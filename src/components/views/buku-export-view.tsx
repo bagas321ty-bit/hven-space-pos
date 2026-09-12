@@ -33,6 +33,8 @@ export function BukuExportView() {
   const sisihOpsPerDay = usePos((s) => s.sisihOpsPerDay);
   const priveWeeklyCap = usePos((s) => s.priveWeeklyCap);
   const actor = usePos((s) => s.bukuSession?.name ?? "Owner");
+  const moneyBooks = usePos((s) => s.moneyBooks);
+  const ledger = usePos((s) => s.ledger);
   const [mode, setMode] = useState<BukuScopeMode>("cutoff");
   const [busy, setBusy] = useState(false);
   const cur = cutoffPeriod();
@@ -54,6 +56,8 @@ export function BukuExportView() {
       sisihOpsPerDay,
       priveWeeklyCap,
       actor,
+      moneyBooks,
+      ledger,
     }),
     [
       dailySales,
@@ -71,6 +75,8 @@ export function BukuExportView() {
       sisihOpsPerDay,
       priveWeeklyCap,
       actor,
+      moneyBooks,
+      ledger,
     ],
   );
 

@@ -7,7 +7,7 @@ import {
   priveWeekInfo,
   resolveMoneyIn,
 } from "@/lib/sheet-books";
-import { DAILY_TARGET, MONTHLY_TARGET, normalizeManagerCash, type DailyBook, type DailySale, type Expense, type Income, type ManagerCashLog, type MoneyInRow, type Order, type Product, type TutupBuku, type WeeklyRow } from "@/lib/types";
+import { DAILY_TARGET, MONTHLY_TARGET, normalizeManagerCash, type DailyBook, type DailySale, type Expense, type Income, type LedgerEntry, type ManagerCashLog, type MoneyBooks, type MoneyInRow, type Order, type Product, type TutupBuku, type WeeklyRow } from "@/lib/types";
 
 export type BukuScopeMode = "cutoff" | "all";
 
@@ -27,6 +27,8 @@ export interface BukuExportInput {
   sisihOpsPerDay: number;
   priveWeeklyCap: number;
   actor: string;
+  moneyBooks?: MoneyBooks;
+  ledger?: LedgerEntry[];
 }
 
 export interface BukuScope {
@@ -481,6 +483,25 @@ export async function buildBukuWorkbook(input: BukuExportInput, scope: BukuScope
       o.total,
     ]),
     [9, 10, 11, 12],
+  );
+
+  const rekWs = wb.addWorksheet("Uang Rekening");
+  const mb = input.moneyBooks ?? { rekening: 921000, cash: 720000, sisihGajiBank: 1400000 };
+  addTable(
+    rekWs,
+    ["Pos", "Saldo"],
+    [
+      ["Uang di rekening", mb.rekening],
+      ["Cash laci kasir", mb.cash],
+      ["Rekening sisih gaji", mb.sisihGajiBank],
+    ],
+    [2],
+  );
+  addTable(
+    rekWs,
+    ["Waktu", "Jenis", "Nominal", "Oleh", "Catatan"],
+    (input.ledger ?? []).map((r) => [r.at, r.kind, r.amount, r.actor, r.note]),
+    [3],
   );
 
   const cara = wb.addWorksheet("Cara Baca");

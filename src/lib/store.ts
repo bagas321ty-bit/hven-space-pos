@@ -31,6 +31,8 @@ import type {
   WorkShift,
   ShiftChangeLog,
   MoneyInRow,
+  MoneyBooks,
+  LedgerEntry,
   ManagerCashLog,
 } from "@/lib/types";
 import {
@@ -195,6 +197,8 @@ export interface AppState {
   priveWeeklyCap: number;
   managerCashCap: number;
   managerCash: ManagerCashLog[];
+  moneyBooks: MoneyBooks;
+  ledger: LedgerEntry[];
   workShifts: WorkShift[];
   shiftLogs: ShiftChangeLog[];
   deviceId: string;
@@ -287,6 +291,8 @@ export interface AppState {
   openShift: (cash: number, staffId?: string) => void;
   closeShift: () => void;
   setShiftCashier: (staffId: string) => void;
+  setorTunai: (amount: number, note?: string) => string | null;
+  adjustMoneyBooks: (patch: Partial<MoneyBooks>, note?: string) => void;
   addStaff: (s: Staff) => void;
   updateStaff: (s: Staff) => void;
   removeStaff: (id: string) => string | null;
@@ -308,6 +314,17 @@ export interface AppState {
 function lineTotal(item: CartItem): number {
   const add = item.addons.reduce((s, a) => s + a.price, 0);
   return (item.price + add) * item.qty;
+}
+
+export const SEED_MONEY: MoneyBooks = { rekening: 921_000, cash: 720_000, sisihGajiBank: 1_400_000 };
+
+function ensureBooks(b?: MoneyBooks | null): MoneyBooks {
+  if (!b || typeof b.rekening !== "number") return { ...SEED_MONEY };
+  return {
+    rekening: Math.max(0, Math.round(Number(b.rekening) || 0)),
+    cash: Math.max(0, Math.round(Number(b.cash) || 0)),
+    sisihGajiBank: Math.max(0, Math.round(Number(b.sisihGajiBank) || 0)),
+  };
 }
 
 function addedItems(next: CartItem[], prev: CartItem[]): CartItem[] {
@@ -505,6 +522,8 @@ export const usePos = create<AppState>()(
       priveWeeklyCap: PRIVE_WEEKLY_CAP,
       managerCashCap: MANAGER_CASH_CAP,
       managerCash: [],
+      moneyBooks: { ...SEED_MONEY },
+      ledger: [],
       workShifts: WORK_SHIFTS,
       shiftLogs: [],
       deviceId: "",
@@ -849,9 +868,11 @@ export const usePos = create<AppState>()(
           const n = cart.filter((c) => c.productId === p.id).reduce((s, c) => s + c.qty, 0);
           return n ? { ...p, soldQty: p.soldQty + n } : p;
         });
-        const shift = { ...get().shift };
+        const shift = { ...get().shift, open: true };
         if (method === "Cash") shift.cashSales += t.total;
         else shift.nonCashSales += t.total;
+        const books = ensureBooks(get().moneyBooks);
+        if (method === "Cash") books.cash += t.total;
         const cups = cart.reduce((s, c) => s + c.qty, 0);
         const dailySales = [...get().dailySales];
         const today = todayISO();
@@ -942,6 +963,7 @@ export const usePos = create<AppState>()(
           table: "",
           openBillId: null,
           shift,
+          moneyBooks: books,
           lastReceipt: order,
           paymentOpen: false,
           receiptOpen: true,
@@ -1042,9 +1064,11 @@ export const usePos = create<AppState>()(
           const n = o.items.filter((c) => c.productId === p.id).reduce((s, c) => s + c.qty, 0);
           return n ? { ...p, soldQty: p.soldQty + n } : p;
         });
-        const shift = { ...get().shift };
+        const shift = { ...get().shift, open: true };
         if (o.payment === "Cash") shift.cashSales += o.total;
         else shift.nonCashSales += o.total;
+        const books = ensureBooks(get().moneyBooks);
+        if (o.payment === "Cash") books.cash += o.total;
         const dailySales = [...get().dailySales];
         const today = todayISO();
         const row = dailySales.find((d) => d.date === today);
@@ -1055,6 +1079,7 @@ export const usePos = create<AppState>()(
           products: nextProducts,
           inventory: deductRecipes(get().inventory, o.items, get().recipes),
           shift,
+          moneyBooks: books,
           lastReceipt: paid,
           dailySales,
           notifications: [
@@ -1205,8 +1230,13 @@ export const usePos = create<AppState>()(
           set({ pinOpen: true, pendingView: get().view });
           return;
         }
+        const books = ensureBooks(get().moneyBooks);
+        if (target?.status === "paid" && target.payment === "Cash") {
+          books.cash = Math.max(0, books.cash - target.total);
+        }
         set({
           orders: get().orders.map((o) => (o.id === id ? { ...o, status: "void", kdsStatus: "done" } : o)),
+          moneyBooks: books,
         });
       },
       setKds: (id, status) => {
@@ -1243,6 +1273,11 @@ export const usePos = create<AppState>()(
         const wasCash = o.payment === "Cash";
         const isCash = method === "Cash";
         let shift = get().shift;
+        const books = ensureBooks(get().moneyBooks);
+        if (wasCash !== isCash) {
+          if (isCash) books.cash += o.total;
+          else books.cash = Math.max(0, books.cash - o.total);
+        }
         if (wasCash !== isCash && shift.open && shiftDateISO(o.createdAt) === todayISO()) {
           shift = { ...shift };
           if (wasCash) {
@@ -1262,6 +1297,7 @@ export const usePos = create<AppState>()(
         set({
           orders,
           shift,
+          moneyBooks: books,
           lastReceipt,
           audit: [
             {
@@ -1350,20 +1386,41 @@ export const usePos = create<AppState>()(
         if (get().expenses.some((x) => expenseKey(x) === key)) {
           return "Pengeluaran yang sama sudah tercatat. Tidak disimpan ulang.";
         }
+        const books = ensureBooks(get().moneyBooks);
+        const ledger = [...(get().ledger ?? [])];
+        if (row.date >= "2026-09-12" && row.pay === "Tunai") {
+          books.cash = Math.max(0, books.cash - row.amount);
+          ledger.unshift({
+            id: uid("led"),
+            at: new Date().toISOString(),
+            kind: "expense-cash",
+            amount: -row.amount,
+            note: row.desc,
+            actor: get().staff.find((s) => s.id === get().currentStaffId)?.name ?? get().bukuSession?.name ?? "Staf",
+          });
+        }
         set({
           expenses: [row, ...get().expenses],
+          moneyBooks: books,
+          ledger,
         });
         nudgeCloud();
         return null;
       },
       setExpensePay: (id, pay) => {
         const row = get().expenses.find((e) => e.id === id);
-        if (!row || row.date < "2026-09-12") return;
-        set({ expenses: get().expenses.map((e) => (e.id === id ? { ...e, pay } : e)) });
+        if (!row || row.date < "2026-09-12" || row.pay === pay) return;
+        const books = ensureBooks(get().moneyBooks);
+        if (pay === "Tunai" && row.pay !== "Tunai") books.cash = Math.max(0, books.cash - row.amount);
+        if (row.pay === "Tunai" && pay !== "Tunai") books.cash += row.amount;
+        set({ expenses: get().expenses.map((e) => (e.id === id ? { ...e, pay } : e)), moneyBooks: books });
         nudgeCloud();
       },
       deleteExpense: (id) => {
-        set({ expenses: get().expenses.filter((e) => e.id !== id) });
+        const row = get().expenses.find((e) => e.id === id);
+        const books = ensureBooks(get().moneyBooks);
+        if (row && row.date >= "2026-09-12" && row.pay === "Tunai") books.cash += row.amount;
+        set({ expenses: get().expenses.filter((e) => e.id !== id), moneyBooks: books });
         nudgeCloud();
       },
       addIncome: (e) => {
@@ -1630,24 +1687,20 @@ export const usePos = create<AppState>()(
       openShift: (cash, staffId) => {
         const s = get().staff.find((x) => x.id === (staffId || get().currentStaffId)) ?? get().staff[0];
         const name = s?.name ?? "Kasir";
+        const cur = get().shift;
         set({
           currentStaffId: s?.id ?? get().currentStaffId,
           shift: {
+            ...cur,
             open: true,
-            openedAt: new Date().toISOString(),
-            openingCash: cash,
-            cashSales: 0,
-            nonCashSales: 0,
+            openedAt: cur.openedAt || new Date().toISOString(),
             cashier: name,
           },
-          audit: [{ id: uid("au"), time: new Date().toLocaleString("id-ID"), actor: name, action: `Buka shift kasir · modal ${formatIDR(cash)}` }, ...get().audit],
         });
       },
-      closeShift: () =>
-        set({
-          shift: { ...get().shift, open: false },
-          audit: [{ id: uid("au"), time: new Date().toLocaleString("id-ID"), actor: get().shift.cashier, action: "Tutup shift kasir" }, ...get().audit],
-        }),
+      closeShift: () => {
+        /* Shift mengikuti kas fisik. Tidak ditutup. */
+      },
       setShiftCashier: (staffId) => {
         const s = get().staff.find((x) => x.id === staffId);
         if (!s) return;
@@ -1660,6 +1713,48 @@ export const usePos = create<AppState>()(
             ...get().audit,
           ],
         });
+      },
+      setorTunai: (amount, note) => {
+        const n = Math.round(Number(amount) || 0);
+        if (n <= 0) return "Nominal setor tidak valid.";
+        const books = ensureBooks(get().moneyBooks);
+        if (n > books.cash) return `Kas tunai hanya ${formatIDR(books.cash)}.`;
+        const actor = get().bukuSession?.name ?? get().staff.find((s) => s.id === get().currentStaffId)?.name ?? "Manager";
+        books.cash -= n;
+        books.rekening += n;
+        const row: LedgerEntry = {
+          id: uid("led"),
+          at: new Date().toISOString(),
+          kind: "setor",
+          amount: n,
+          note: note?.trim() || "Setor tunai ke rekening",
+          actor,
+        };
+        set({
+          moneyBooks: books,
+          ledger: [row, ...(get().ledger ?? [])],
+        });
+        nudgeCloud();
+        return null;
+      },
+      adjustMoneyBooks: (patch, note) => {
+        const books = { ...ensureBooks(get().moneyBooks), ...patch };
+        const actor = get().bukuSession?.name ?? "Owner";
+        set({
+          moneyBooks: ensureBooks(books),
+          ledger: [
+            {
+              id: uid("led"),
+              at: new Date().toISOString(),
+              kind: "adjust",
+              amount: 0,
+              note: note?.trim() || "Koreksi saldo",
+              actor,
+            },
+            ...(get().ledger ?? []),
+          ],
+        });
+        nudgeCloud();
       },
       addStaff: (s) => set({ staff: [...get().staff, s] }),
       updateStaff: (s) =>
@@ -1811,6 +1906,8 @@ export const usePos = create<AppState>()(
           priveWeeklyCap: payload.priveWeeklyCap ?? get().priveWeeklyCap,
           managerCashCap: cap,
           managerCash: (payload.managerCash ?? []).map((r) => normalizeManagerCash(r, cap)),
+          moneyBooks: ensureBooks(payload.moneyBooks ?? get().moneyBooks),
+          ledger: payload.ledger ?? get().ledger ?? [],
           workShifts: ensureWorkShifts(payload.workShifts),
           shiftLogs: payload.shiftLogs ?? [],
           cart: Array.isArray(payload.cart) ? payload.cart : get().cart,
@@ -1857,6 +1954,8 @@ export const usePos = create<AppState>()(
                 normalizeManagerCash(r, typeof p.managerCashCap === "number" && p.managerCashCap >= 0 ? p.managerCashCap : MANAGER_CASH_CAP),
               )
             : [],
+          moneyBooks: ensureBooks(p.moneyBooks),
+          ledger: Array.isArray(p.ledger) ? p.ledger : [],
           workShifts: ensureWorkShifts(p.workShifts && p.workShifts.length ? p.workShifts : WORK_SHIFTS),
           shiftLogs: p.shiftLogs ?? [],
           cartEpoch: typeof p.cartEpoch === "number" ? p.cartEpoch : 0,
@@ -1888,7 +1987,7 @@ export const usePos = create<AppState>()(
             orders: p.orders ?? current.orders,
             products: synced.products,
             inventory: (p.inventory ?? current.inventory).map(normalizeIngredient),
-            shift: p.shift ?? current.shift,
+            shift: { ...(p.shift ?? current.shift), open: true },
           }),
           sheetSync: SHEET_SYNC,
           expenses: synced.expenses,
@@ -1946,6 +2045,8 @@ export const usePos = create<AppState>()(
         priveWeeklyCap: s.priveWeeklyCap,
         managerCashCap: s.managerCashCap,
         managerCash: s.managerCash,
+        moneyBooks: s.moneyBooks,
+        ledger: s.ledger,
         workShifts: s.workShifts,
         shiftLogs: s.shiftLogs,
         deviceId: s.deviceId,

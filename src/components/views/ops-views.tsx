@@ -930,32 +930,31 @@ export function ShiftView() {
   const shift = usePos((s) => s.shift);
   const staff = usePos((s) => s.staff);
   const currentStaffId = usePos((s) => s.currentStaffId);
-  const openShift = usePos((s) => s.openShift);
-  const closeShift = usePos((s) => s.closeShift);
   const setShiftCashier = usePos((s) => s.setShiftCashier);
-  const [cash, setCash] = useState(500000);
+  const moneyBooks = usePos((s) => s.moneyBooks);
   const [cashierId, setCashierId] = useState(currentStaffId);
-  const expected = shift.openingCash + shift.cashSales;
   const floor = staff.filter((s) => s.active);
+  const cashNow = moneyBooks?.cash ?? 0;
   return (
     <div className="h-full overflow-auto p-4 space-y-4">
       <h2 className="font-display text-xl font-medium">Shift Kasir</h2>
-      <p className="text-sm text-muted-foreground">Jam operasional 07.00–02.00. Transaksi jam 00–01.59 masuk hari kemarin. Tablet: ganti nama kasir di sini tanpa tutup shift.</p>
+      <p className="text-sm text-muted-foreground">
+        Kas fisik mengikuti penjualan tunai, pengeluaran tunai, dan setor manager. Tidak ada buka/tutup shift.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Status" value={shift.open ? "Aktif" : "Tutup"} />
         <Stat label="Kasir" value={shift.cashier} />
-        <Stat label="Modal awal" value={formatIDR(shift.openingCash)} />
-        <Stat label="Kas diharapkan" value={formatIDR(expected)} />
+        <Stat label="Kas tunai fisik" value={formatIDR(cashNow)} />
+        <Stat label="Penjualan tunai" value={formatIDR(shift.cashSales)} />
+        <Stat label="Non-tunai" value={formatIDR(shift.nonCashSales)} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-          <p className="text-sm text-muted-foreground">Penjualan tunai</p>
-          <p className="font-mono text-2xl tabular-nums text-primary">{formatIDR(shift.cashSales)}</p>
-          <p className="text-sm text-muted-foreground">Non-tunai (QRIS / Debit / Transfer)</p>
-          <p className="font-mono text-2xl tabular-nums">{formatIDR(shift.nonCashSales)}</p>
+          <p className="text-sm text-muted-foreground">Kas di laci (benar di lapangan)</p>
+          <p className="font-mono text-3xl tabular-nums text-primary">{formatIDR(cashNow)}</p>
+          <p className="text-xs text-muted-foreground">Naik saat bayar tunai. Turun saat pengeluaran tunai atau setor ke rekening.</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-          <label className="text-sm text-muted-foreground">Nama kasir di shift / struk</label>
+          <label className="text-sm text-muted-foreground">Nama kasir di struk</label>
           <select
             className="h-12 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={cashierId}
@@ -972,28 +971,11 @@ export function ShiftView() {
             variant="outline"
             onClick={() => {
               setShiftCashier(cashierId);
-              toast.success(`Kasir shift: ${floor.find((s) => s.id === cashierId)?.name}`);
+              toast.success(`Kasir: ${floor.find((s) => s.id === cashierId)?.name}`);
             }}
           >
             Ganti nama kasir
           </Button>
-          <label className="text-sm text-muted-foreground">Modal kas buka shift</label>
-          <Input type="number" className="h-12" value={cash} onChange={(e) => setCash(Number(e.target.value))} />
-          <div className="flex gap-2">
-            <Button
-              className="h-12 flex-1"
-              disabled={shift.open}
-              onClick={() => {
-                openShift(cash, cashierId);
-                toast.success("Shift dibuka.");
-              }}
-            >
-              Buka shift
-            </Button>
-            <Button className="h-12 flex-1" variant="secondary" disabled={!shift.open} onClick={closeShift}>
-              Tutup shift
-            </Button>
-          </div>
         </div>
       </div>
     </div>
