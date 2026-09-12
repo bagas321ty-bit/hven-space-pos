@@ -122,7 +122,7 @@ function useNetlifyProxy(): boolean {
 }
 
 async function proxyNetlify(body: Record<string, unknown>) {
-  const url = process.env.POS_CLOUD_UPSTREAM || "https://hven-space-pos.netlify.app/api/pos-cloud";
+  const url = process.env.POS_CLOUD_UPSTREAM || "http://139.190.97.16/api/pos-cloud";
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
