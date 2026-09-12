@@ -378,7 +378,7 @@ export function ExpensesView() {
   const deleteExpense = usePos((s) => s.deleteExpense);
   const priveWeeklyCap = usePos((s) => s.priveWeeklyCap);
   const cur = cutoffPeriod();
-  const [form, setForm] = useState({ date: todayISO(), category: "Bahan Baku", desc: "", amount: 0, nota: "" });
+  const [form, setForm] = useState({ date: todayISO(), category: "Bahan Baku", desc: "", amount: 0, nota: "", pay: "Tunai" as "Tunai" | "Non Tunai" });
   const [cat, setCat] = useState<"all" | string>("all");
   const [scope, setScope] = useState<"current" | "arsip" | "all">("all");
   const [err, setErr] = useState("");
@@ -393,6 +393,8 @@ export function ExpensesView() {
     });
   }, [expenses, cat, scope, cur.start, cur.end]);
   const total = rows.reduce((s, e) => s + e.amount, 0);
+  const tunai = rows.filter((e) => e.date >= "2026-09-12" && e.pay === "Tunai").reduce((s, e) => s + e.amount, 0);
+  const nontunai = rows.filter((e) => e.date >= "2026-09-12" && e.pay === "Non Tunai").reduce((s, e) => s + e.amount, 0);
   const byCat = useMemo(() => {
     const m = new Map<string, number>();
     rows.forEach((e) => m.set(displayCat(e.category), (m.get(displayCat(e.category)) ?? 0) + e.amount));
@@ -412,6 +414,7 @@ export function ExpensesView() {
         </div>
         <p className="font-mono text-sm text-destructive">
           {rows.length} transaksi · {formatIDR(total)}
+          {tunai + nontunai > 0 ? ` · tunai ${formatIDR(tunai)} · non ${formatIDR(nontunai)}` : ""}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -443,7 +446,10 @@ export function ExpensesView() {
           onSubmit={async (e) => {
             e.preventDefault();
             if (!form.desc || form.amount <= 0 || saving) return;
-            const msg = addExpense(form);
+            const msg = addExpense({
+              ...form,
+              pay: form.date >= "2026-09-12" ? form.pay : undefined,
+            });
             if (msg) {
               setErr(msg);
               toast.error(msg);
@@ -486,6 +492,17 @@ export function ExpensesView() {
           <Input required placeholder="Keterangan" value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} />
           <Input type="number" required placeholder="Nominal" value={form.amount || ""} onChange={(e) => { setErr(""); setForm({ ...form, amount: Number(e.target.value) }); }} />
           <Input placeholder="No. nota (opsional)" value={form.nota} onChange={(e) => setForm({ ...form, nota: e.target.value })} />
+          {form.date >= "2026-09-12" ? (
+            <div className="grid grid-cols-2 gap-2">
+              {(["Tunai", "Non Tunai"] as const).map((m) => (
+                <Button key={m} type="button" variant={form.pay === m ? "default" : "secondary"} className="h-11" onClick={() => setForm({ ...form, pay: m })}>
+                  {m}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Metode tunai/non tunai berlaku mulai 12 Sep 2026.</p>
+          )}
           {isPriveCat(form.category) ? (
             <p className={`text-xs ${week.over || form.amount > week.remain ? "text-destructive" : "text-muted-foreground"}`}>
               Kuota prive {week.label}: {formatIDR(week.used)} / {formatIDR(week.cap)}. Sisa {formatIDR(week.remain)}.
@@ -500,7 +517,7 @@ export function ExpensesView() {
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 bg-muted text-xs uppercase text-muted-foreground">
               <tr>
-                {["Tanggal", "Kategori", "Keterangan", "Nota", "Nominal", ""].map((h) => (
+                {["Tanggal", "Kategori", "Keterangan", "Nota", "Metode", "Nominal", ""].map((h) => (
                   <th key={h} className="px-3 py-2">
                     {h}
                   </th>
@@ -516,6 +533,7 @@ export function ExpensesView() {
                   </td>
                   <td className="px-3 py-2">{e.desc}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{e.nota || "—"}</td>
+                  <td className="px-3 py-2 text-xs">{e.date >= "2026-09-12" ? (e.pay || "—") : "—"}</td>
                   <td className="px-3 py-2 text-right font-mono text-destructive tabular-nums">{formatIDR(e.amount)}</td>
                   <td className="px-3 py-2">
                     <Button size="sm" variant="ghost" className="text-destructive h-11" onClick={() => deleteExpense(e.id)}>

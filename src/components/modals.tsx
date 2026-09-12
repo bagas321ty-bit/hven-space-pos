@@ -434,7 +434,36 @@ export function ProductFormModal() {
               />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">
-                  {photoBusy ? "Memproses…" : "Unggah / kamera"}
+                  {photoBusy ? "Memproses…" : "Pilih dari galeri"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={photoBusy}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      setPhotoBusy(true);
+                      try {
+                        const raw = await new Promise<string>((resolve, reject) => {
+                          const r = new FileReader();
+                          r.onload = () => resolve(String(r.result));
+                          r.onerror = () => reject(new Error("Gagal baca file"));
+                          r.readAsDataURL(file);
+                        });
+                        setImage(await compressMenuPhoto(raw));
+                        toast.success("Foto siap. Simpan menu supaya tampil di tamu.");
+                      } catch {
+                        toast.error("Foto gagal diproses.");
+                      } finally {
+                        setPhotoBusy(false);
+                      }
+                    }}
+                  />
+                </label>
+                <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md border border-border px-3 text-sm font-medium">
+                  Ambil kamera
                   <input
                     type="file"
                     accept="image/*"

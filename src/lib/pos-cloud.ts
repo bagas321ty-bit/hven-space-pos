@@ -179,7 +179,7 @@ function pickProduct(a: Product, b: Product): Product {
   const aCh = changed(a);
   const bCh = changed(b);
   const named = aCh && !bCh ? a : bCh && !aCh ? b : (a.soldQty ?? 0) >= (b.soldQty ?? 0) ? a : b;
-  return { ...named, stock, soldQty: sold, available: named.available };
+  return { ...named, stock, soldQty: sold, available: named.available, image: a.image || b.image || named.image, blurb: a.blurb || b.blurb || named.blurb };
 }
 
 function pickAttendance(a: Attendance, b: Attendance): Attendance {
@@ -221,6 +221,7 @@ export function expenseKey(e: Expense): string {
     (e.desc ?? "").trim().toLowerCase(),
     String(e.amount ?? 0),
     (e.nota ?? "").trim().toLowerCase(),
+    (e.pay ?? "").trim().toLowerCase(),
   ].join("|");
 }
 
@@ -367,12 +368,12 @@ export function extractPayload(s: CloudPayload): CloudPayload {
 }
 
 export function payloadFingerprint(p: CloudPayload): string {
-  const exp = p.expenses.map((e) => `${e.id}:${e.date}:${e.amount}`).join(",");
+  const exp = p.expenses.map((e) => `${e.id}:${e.date}:${e.amount}:${e.pay ?? ""}`).join(",");
   const inc = p.incomes.map((e) => `${e.id}:${e.date}:${e.amount}`).join(",");
   const cash = p.managerCash.map((e) => `${e.id}:${e.deposited ?? 0}`).join(",");
   return [
     p.orders.map((o) => `${o.id}:${o.status}:${o.kdsStatus}:${o.updatedAt ?? ""}`).join(","),
-    p.products.length,
+    p.products.map((x) => `${x.id}:${x.price}:${x.image?.length ?? 0}`).join(","),
     exp,
     inc,
     cash,

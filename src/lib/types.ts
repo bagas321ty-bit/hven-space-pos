@@ -131,6 +131,8 @@ export interface Expense {
   desc: string;
   amount: number;
   nota?: string;
+  /** Dari 12 Sep 2026. Transaksi lama boleh kosong. */
+  pay?: "Tunai" | "Non Tunai";
 }
 
 export interface Income {

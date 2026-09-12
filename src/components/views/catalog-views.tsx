@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatIDR } from "@/lib/format";
-import { menuPhoto } from "@/lib/menu-photos";
+import { compressMenuPhoto, menuPhoto } from "@/lib/menu-photos";
 import { FILL_META, FILL_ORDER, fillFromStock, isIngredientLow, jarFullQty, qtyLabel, stockFromFill } from "@/lib/inventory";
 import { usePos } from "@/lib/store";
 import type { FillLevel, Ingredient, Staff } from "@/lib/types";
@@ -201,7 +201,31 @@ export function ProductsView() {
                 <tr key={p.id} className="border-t border-border">
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <img src={menuPhoto(p)} alt="" className="size-10 rounded-md object-cover" />
+                      <label className="relative size-10 shrink-0 cursor-pointer overflow-hidden rounded-md">
+                        <img src={menuPhoto(p)} alt="" className="size-10 object-cover" />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (!file) return;
+                            try {
+                              const raw = await new Promise<string>((resolve, reject) => {
+                                const r = new FileReader();
+                                r.onload = () => resolve(String(r.result));
+                                r.onerror = () => reject(new Error("gagal"));
+                                r.readAsDataURL(file);
+                              });
+                              upsert({ ...p, image: await compressMenuPhoto(raw) });
+                              toast.success(`Foto ${p.name} disimpan.`);
+                            } catch {
+                              toast.error("Foto gagal.");
+                            }
+                          }}
+                        />
+                      </label>
                       <div>
                         <p className="font-medium">{p.name}</p>
                         <p className="font-mono text-xs text-muted-foreground">{p.sku}</p>

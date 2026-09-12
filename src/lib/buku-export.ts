@@ -390,8 +390,8 @@ export async function buildBukuWorkbook(input: BukuExportInput, scope: BukuScope
   const expWs = wb.addWorksheet("Pengeluaran");
   addTable(
     expWs,
-    ["Tanggal", "Kategori", "Keterangan", "Nominal", "Nota"],
-    expenses.map((e) => [formatDateID(e.date), displayCat(e.category), e.desc, e.amount, e.nota ?? ""]),
+    ["Tanggal", "Kategori", "Keterangan", "Nominal", "Nota", "Metode"],
+    expenses.map((e) => [formatDateID(e.date), displayCat(e.category), e.desc, e.amount, e.nota ?? "", e.date >= "2026-09-12" ? (e.pay ?? "") : ""]),
     [4],
   );
 

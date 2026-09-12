@@ -1378,6 +1378,7 @@ export const usePos = create<AppState>()(
           products,
           menuCategories: ensureMenuCategories(get().menuCategories, products),
         });
+        nudgeCloud();
       },
       deleteProduct: (id) =>
         set({
