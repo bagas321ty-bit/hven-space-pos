@@ -1,5 +1,5 @@
 import { VENUE_PASS_SHA256 } from "./venue-auth";
-import type { CloudDoc, CloudPayload } from "./pos-cloud";
+import { mergePayloads, type CloudDoc, type CloudPayload } from "./pos-cloud";
 
 export interface CloudStorage {
   read: () => Promise<CloudDoc | null>;
@@ -81,7 +81,7 @@ export type PullCloudResult =
   | { ok: false; error: string };
 
 export type PushCloudResult =
-  | { ok: true; rev: number; updatedAt: string }
+  | { ok: true; rev: number; updatedAt: string; payload?: CloudPayload }
   | {
       ok: false;
       error: string;
@@ -109,25 +109,23 @@ export async function pushCloud(
   if (!assertToken(input.token)) return { ok: false, error: "Akses sinkron ditolak." };
   if (!isCloudPayload(input.payload)) return { ok: false, error: "Paket data tidak valid." };
   try {
-    const current = await storage.read();
-    if (current && current.rev !== input.baseRev) {
-      return {
-        ok: false,
-        error: "Ada update dari perangkat lain.",
-        conflict: true,
-        rev: current.rev,
-        updatedAt: current.updatedAt,
-        payload: current.payload,
+    let outgoing = input.payload;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const current = await storage.read();
+      outgoing = current ? mergePayloads(input.payload, current.payload) : input.payload;
+      const next: CloudDoc = {
+        rev: (current?.rev ?? 0) + 1,
+        updatedAt: new Date().toISOString(),
+        device: input.device || "unknown",
+        payload: outgoing,
       };
+      await storage.write(next);
+      const check = await storage.read();
+      if (!check || check.rev === next.rev) {
+        return { ok: true, rev: next.rev, updatedAt: next.updatedAt, payload: outgoing };
+      }
     }
-    const next: CloudDoc = {
-      rev: (current?.rev ?? 0) + 1,
-      updatedAt: new Date().toISOString(),
-      device: input.device || "unknown",
-      payload: input.payload,
-    };
-    await storage.write(next);
-    return { ok: true, rev: next.rev, updatedAt: next.updatedAt };
+    return { ok: true, rev: 0, updatedAt: new Date().toISOString(), payload: outgoing };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Gagal menyimpan ke cloud." };
   }

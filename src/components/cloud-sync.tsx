@@ -9,6 +9,7 @@ import {
 } from "@/lib/pos-cloud";
 import { usePos } from "@/lib/store";
 import { offloadAttendanceList, flushPendingPhotos } from "@/lib/att-photo";
+import { onCloudNudge } from "@/lib/cloud-nudge";
 import { VENUE_PASS_SHA256 } from "@/lib/venue-auth";
 import { cn } from "@/lib/utils";
 
@@ -38,8 +39,12 @@ async function pushNow(payload: CloudPayload) {
     payload,
   });
   if (res.ok) {
-    lastFingerprint = payloadFingerprint(payload);
-    s.setCloudMeta({ cloudRev: res.rev, cloudAt: res.updatedAt, cloudStatus: "ok", cloudError: "" });
+    lastFingerprint = payloadFingerprint(res.payload ?? payload);
+    if (res.payload) {
+      s.applyCloud(res.payload, res.rev, res.updatedAt);
+    } else {
+      s.setCloudMeta({ cloudRev: res.rev, cloudAt: res.updatedAt, cloudStatus: "ok", cloudError: "" });
+    }
     return true;
   }
   if (res.conflict && res.payload) {
@@ -171,6 +176,10 @@ export function CloudSync() {
       if (!s.hydrated || s.cloudApplying) return;
       if (s === prev) return;
       schedulePush();
+    });
+    onCloudNudge(() => {
+      schedulePush();
+      void runCloudSync("local");
     });
 
     const poll = window.setInterval(() => {

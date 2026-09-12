@@ -5,11 +5,15 @@ import {
   pushCloud as pushWith,
   getAttPhoto as getPhotoWith,
   putAttPhoto as putPhotoWith,
+  isCloudPayload,
   type CloudStorage,
   type PhotoStorage,
+  type PullCloudResult,
+  type PushCloudResult,
+  type PhotoGetResult,
+  type PhotoPutResult,
 } from "@/lib/pos-cloud-ops";
-import type { CloudDoc, CloudPayload } from "@/lib/pos-cloud";
-import type { PhotoGetResult, PhotoPutResult, PullCloudResult, PushCloudResult } from "@/lib/pos-cloud-ops";
+import { mergePayloads, type CloudDoc, type CloudPayload } from "@/lib/pos-cloud";
 
 const ROW_ID = "hven-space";
 const BLOB_KEY = "snapshot";
@@ -148,13 +152,28 @@ export async function pushCloud(input: {
 }): Promise<PushCloudResult> {
   try {
     if (useNetlifyProxy()) {
-      return (await proxyNetlify({
-        op: "push",
-        token: input.token,
-        baseRev: input.baseRev,
-        device: input.device,
-        payload: input.payload,
-      })) as PushCloudResult;
+      let outgoing = input.payload;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const pulled = (await proxyNetlify({ op: "pull", token: input.token })) as PullCloudResult;
+        if (!pulled.ok) return pulled;
+        if (!pulled.empty && isCloudPayload(pulled.payload)) {
+          outgoing = mergePayloads(input.payload, pulled.payload);
+        }
+        const pushed = (await proxyNetlify({
+          op: "push",
+          token: input.token,
+          baseRev: pulled.empty ? 0 : pulled.rev,
+          device: input.device,
+          payload: outgoing,
+        })) as PushCloudResult;
+        if (pushed.ok) return { ...pushed, payload: outgoing };
+        if (pushed.conflict && pushed.payload && isCloudPayload(pushed.payload)) {
+          outgoing = mergePayloads(input.payload, pushed.payload);
+          continue;
+        }
+        return pushed;
+      }
+      return { ok: false, error: "Cloud sibuk. Coba sinkron lagi." };
     }
     return await pushWith(input, await resolveStorage());
   } catch (err) {

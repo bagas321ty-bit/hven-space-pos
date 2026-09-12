@@ -74,6 +74,7 @@ import { isPriveCat, mergeSheetBooks, SHEET_SYNC } from "@/lib/sheet-books";
 import { slimAttendance } from "@/lib/att-photo-slim";
 import type { WaMode } from "@/lib/whatsapp";
 import type { CloudPayload } from "@/lib/pos-cloud";
+import { nudgeCloud } from "@/lib/cloud-nudge";
 
 const memoryStore: Record<string, string> = {};
 
@@ -1218,10 +1219,17 @@ export const usePos = create<AppState>()(
         set({
           expenses: [{ id: uid("exp"), ...e }, ...get().expenses],
         });
+        nudgeCloud();
         return null;
       },
-      deleteExpense: (id) => set({ expenses: get().expenses.filter((e) => e.id !== id) }),
-      addIncome: (e) => set({ incomes: [{ id: uid("inc"), ...e }, ...get().incomes] }),
+      deleteExpense: (id) => {
+        set({ expenses: get().expenses.filter((e) => e.id !== id) });
+        nudgeCloud();
+      },
+      addIncome: (e) => {
+        set({ incomes: [{ id: uid("inc"), ...e }, ...get().incomes] });
+        nudgeCloud();
+      },
       addIncident: (e) => {
         const row = { id: uid("ins"), ...e };
         set({ incidents: [row, ...get().incidents] });
