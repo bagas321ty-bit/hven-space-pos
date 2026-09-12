@@ -16,7 +16,8 @@ export type ViewId =
   | "expenses"
   | "income"
   | "tutupbuku"
-  | "engineering";
+  | "engineering"
+  | "cloudhub";
 
 export type Role = "cashier" | "owner";
 export type BukuRole = "superadmin" | "pembukuan";
@@ -312,6 +313,7 @@ export const RESTRICTED_VIEWS: ViewId[] = [
   "engineering",
   "staff",
   "incidents",
+  "cloudhub",
 ];
 
 export interface AdjustLog {

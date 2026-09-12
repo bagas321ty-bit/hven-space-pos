@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   ClipboardList,
   Clock,
+  Cloud,
   Coffee,
   CookingPot,
   Fingerprint,
@@ -37,6 +38,7 @@ import { AdjustLogView } from "@/components/views/adjust-view";
 import { PosView } from "@/components/views/pos-view";
 import { OrdersView, KitchenView, AttendanceView, ShiftView, IncidentsView, VenueView, SalesLogView } from "@/components/views/ops-views";
 import { ProductsView, InventoryView, StaffView } from "@/components/views/catalog-views";
+import { CloudHubView } from "@/components/views/cloud-hub-view";
 import {
   DashboardView,
   ExpensesView,
@@ -75,6 +77,7 @@ const NAV: { group: string; items: { id: ViewId; label: string; icon: typeof Cof
       { id: "shift", label: "Shift Kasir", icon: Clock },
       { id: "incidents", label: "Log Insiden", icon: TriangleAlert },
       { id: "staff", label: "Akun Staf & Audit", icon: UserCog },
+      { id: "cloudhub", label: "Cloud toko", icon: Cloud },
     ],
   },
   {
@@ -103,6 +106,7 @@ const TITLES: Record<ViewId, string> = {
   shift: "Shift Kasir",
   incidents: "Log Insiden",
   staff: "Akun Staf & Audit",
+  cloudhub: "Cloud toko (laptop & PC)",
   target: "Dashboard Target",
   dashboard: "Dashboard Owner",
   expenses: "Buku Kas Keluar",
@@ -137,6 +141,8 @@ function ViewSwitch({ view }: { view: ViewId }) {
       return <InventoryView />;
     case "staff":
       return <StaffView />;
+    case "cloudhub":
+      return <CloudHubView />;
     case "target":
       return <TargetView />;
     case "dashboard":
