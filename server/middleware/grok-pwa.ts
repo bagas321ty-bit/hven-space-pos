@@ -36,6 +36,14 @@ function requestHost(event: GrokPwaEvent): string {
   );
 }
 
+function stripNulChunk(chunk: Uint8Array): Uint8Array {
+  if (!chunk.includes(0)) return chunk;
+  const out = new Uint8Array(chunk.length);
+  let n = 0;
+  for (const b of chunk) if (b !== 0) out[n++] = b;
+  return out.subarray(0, n);
+}
+
 function injectHeadStreaming(response: Response, host: string): Response {
   const injector = createHeadInjector({
     host,
@@ -44,7 +52,8 @@ function injectHeadStreaming(response: Response, host: string): Response {
   const transformed = response.body!.pipeThrough(
     new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
-        for (const out of injector.push(chunk)) controller.enqueue(out);
+        const clean = stripNulChunk(chunk);
+        for (const out of injector.push(clean)) controller.enqueue(out);
       },
       flush(controller) {
         for (const out of injector.flush()) controller.enqueue(out);
@@ -53,6 +62,7 @@ function injectHeadStreaming(response: Response, host: string): Response {
   );
   const headers = new Headers(response.headers);
   headers.delete("content-length");
+  headers.set("cache-control", "no-store");
   return new Response(transformed, {
     status: response.status,
     statusText: response.statusText,
