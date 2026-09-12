@@ -1,39 +1,68 @@
 .guest-kiosk {
-  --gk-bg0: #07080c;
-  --gk-bg1: #10161c;
-  --gk-glass: color-mix(in oklab, white 16%, transparent);
-  --gk-glass-2: color-mix(in oklab, white 22%, transparent);
-  --gk-stroke: color-mix(in oklab, white 18%, transparent);
-  --gk-stroke-hot: color-mix(in oklab, var(--color-primary) 55%, white 20%);
-  --gk-blur: 16px;
-  --gk-text: #f6f1ea;
-  --gk-muted: color-mix(in oklab, #f6f1ea 62%, transparent);
-  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, sans-serif;
-  color: var(--gk-text);
+  --gk-ink: #f7f4ef;
+  --gk-mute: color-mix(in oklab, #f7f4ef 58%, transparent);
+  --gk-amber: #e2c08a;
+  --gk-amber-ink: #1a140c;
+  font-family: Inter, "Plus Jakarta Sans", var(--font-sans), system-ui, sans-serif;
+  color: var(--gk-ink);
   min-height: 100dvh;
   background:
-    radial-gradient(1200px 600px at 10% -10%, color-mix(in oklab, #1b3a36 45%, transparent), transparent 60%),
-    radial-gradient(900px 500px at 110% 8%, color-mix(in oklab, #c9a87c 22%, transparent), transparent 55%),
-    radial-gradient(800px 700px at 50% 120%, color-mix(in oklab, #1a2744 50%, transparent), transparent 50%),
-    var(--gk-bg0);
+    radial-gradient(90rem 40rem at 80% -10%, color-mix(in oklab, #c9a87c 18%, transparent), transparent 55%),
+    radial-gradient(50rem 36rem at -10% 20%, color-mix(in oklab, #3a2418 70%, transparent), transparent 50%),
+    radial-gradient(40rem 30rem at 50% 110%, color-mix(in oklab, #1a2740 55%, transparent), transparent 45%),
+    linear-gradient(165deg, #0b0c10 0%, #14110f 42%, #1a120e 100%);
 }
 
 .guest-kiosk .glass {
-  background: var(--gk-glass);
-  backdrop-filter: blur(var(--gk-blur)) saturate(1.2);
-  -webkit-backdrop-filter: blur(var(--gk-blur)) saturate(1.2);
-  border: 1px solid var(--gk-stroke);
+  background: color-mix(in oklab, white 10%, transparent);
+  backdrop-filter: blur(20px) saturate(1.35);
+  -webkit-backdrop-filter: blur(20px) saturate(1.35);
+  border: 1px solid color-mix(in oklab, white 12%, transparent);
+}
+
+.guest-kiosk .glass-deep {
+  background: color-mix(in oklab, #18181b 42%, transparent);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid color-mix(in oklab, white 10%, transparent);
 }
 
 .guest-kiosk .glass-hot {
-  background: color-mix(in oklab, var(--color-primary) 18%, transparent);
-  box-shadow: 0 0 24px color-mix(in oklab, var(--color-primary) 35%, transparent);
-  border-color: var(--gk-stroke-hot);
+  background: color-mix(in oklab, var(--gk-amber) 22%, transparent);
+  border-color: color-mix(in oklab, var(--gk-amber) 55%, white 15%);
+  box-shadow: 0 0 28px color-mix(in oklab, var(--gk-amber) 28%, transparent);
+  color: var(--gk-ink);
+}
+
+.guest-kiosk .cta {
+  background: var(--gk-amber);
+  color: var(--gk-amber-ink);
+  box-shadow: 0 8px 28px color-mix(in oklab, var(--gk-amber) 38%, transparent);
+  font-weight: 600;
+}
+
+.guest-kiosk .cta:active {
+  transform: scale(0.98);
+}
+
+.guest-kiosk .price-glow {
+  color: var(--gk-amber);
+  text-shadow: 0 0 18px color-mix(in oklab, var(--gk-amber) 45%, transparent);
+}
+
+.guest-kiosk .sheet-in {
+  animation: gk-up 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes gk-up {
+  from { transform: translateY(18px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .guest-kiosk * {
-    transition: none !important;
-    animation: none !important;
+  .guest-kiosk .sheet-in,
+  .guest-kiosk .cta {
+    animation: none;
+    transform: none;
   }
 }

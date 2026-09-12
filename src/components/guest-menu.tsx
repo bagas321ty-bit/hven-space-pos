@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ADDONS } from "@/data/seed";
 import { nudgeCloud } from "@/lib/cloud-nudge";
@@ -70,115 +69,150 @@ export function GuestMenu() {
     nudgeCloud();
     toast.success(`${pick.name} masuk ke kasir`);
     setPick(null);
-    setTray(true);
+  };
+
+  const sendToPos = () => {
+    if (!cart.length) {
+      toast.error("Keranjang masih kosong.");
+      return;
+    }
+    nudgeCloud();
+    const payload = {
+      source: "hven-guest-menu",
+      at: new Date().toISOString(),
+      type: orderType,
+      table: orderType === "Dine In" ? table : "-",
+      items: cart.map((i) => ({
+        id: i.productId,
+        name: i.name,
+        qty: i.qty,
+        note: i.note,
+        modifiers: i.addons.map((a) => a.name),
+        price: i.price,
+      })),
+      total: totals.total,
+    };
+    window.dispatchEvent(new CustomEvent("hven-pos-checkout", { detail: payload }));
+    toast.success("Pesanan sudah di kasir. Bayar di meja kasir.");
+    setTray(false);
   };
 
   const extraSum = ADDONS.filter((a) => extras.includes(a.id)).reduce((s, a) => s + a.price, 0);
 
   return (
     <div className="guest-kiosk">
-      <header className="sticky top-0 z-30 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="glass mx-auto flex max-w-3xl items-center gap-3 rounded-[28px] px-3 py-2.5">
-          <div className="min-w-0 pl-2">
-            <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-primary">HVEN Space</p>
-            <p className="truncate font-display text-lg leading-tight">Menu tamu</p>
+      <header className="sticky top-0 z-30 px-4 pb-3 pt-[max(0.85rem,env(safe-area-inset-top))]">
+        <div className="glass mx-auto flex max-w-lg items-center gap-3 rounded-full px-4 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-primary">HVEN Space</p>
+            <p className="truncate text-base font-semibold leading-tight">Digital menu</p>
           </div>
-          <label className="glass relative min-w-0 flex-1 rounded-full px-3">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Cari menu"
-              className="h-11 border-0 bg-transparent pl-8 shadow-none focus-visible:ring-0"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => setTray(true)}
-            className="glass-hot relative flex h-11 shrink-0 items-center gap-2 rounded-full px-3 text-sm font-medium"
-          >
+          <button type="button" onClick={() => setTray(true)} className="glass relative grid size-11 place-items-center rounded-full">
             <ShoppingBag className="size-4" />
-            <span className="tabular-nums">{totals.qty}</span>
-            <span className="hidden font-mono text-xs sm:inline">{formatIDR(totals.total)}</span>
+            {totals.qty > 0 ? (
+              <span className="cta absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full px-1 text-[10px] tabular-nums">
+                {totals.qty}
+              </span>
+            ) : null}
           </button>
         </div>
-        <div className="mx-auto mt-3 flex max-w-3xl gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <label className="glass mx-auto mt-3 flex max-w-lg items-center gap-2 rounded-full px-4">
+          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search menu"
+            className="h-11 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+          />
+        </label>
+        <div className="mx-auto mt-3 flex max-w-lg gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {categories.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => setCat(c)}
-              className={cn(
-                "glass h-11 shrink-0 rounded-full px-4 text-sm font-medium transition-colors duration-200",
-                cat === c && "glass-hot",
-              )}
+              className={cn("glass h-10 shrink-0 rounded-full px-4 text-sm font-medium", cat === c && "glass-hot")}
             >
-              {c}
+              {c === "Semua" ? "All" : c}
             </button>
           ))}
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-3xl grid-cols-2 gap-3 px-4 pb-36">
+      <main className="mx-auto grid max-w-lg grid-cols-2 gap-3 px-4 pb-32">
         {list.map((p) => {
           const sold = !p.available || p.stock <= 0;
           return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => openPick(p)}
-              disabled={sold}
-              className="glass group overflow-hidden rounded-[24px] text-left disabled:opacity-45"
-            >
-              <div className="relative aspect-[3/4] overflow-hidden rounded-t-[23px]">
-                <img src={menuPhoto(p)} alt="" className="size-full object-cover transition-transform duration-300 group-active:scale-[1.03]" />
-                <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
-                <p className="absolute bottom-2 left-2 font-mono text-sm tabular-nums">{formatIDR(p.price)}</p>
+            <article key={p.id} className="glass group overflow-hidden rounded-[22px]">
+              <button type="button" onClick={() => openPick(p)} disabled={sold} className="block w-full text-left disabled:opacity-40">
+                <div className="relative aspect-square overflow-hidden bg-black/25">
+                  <img src={menuPhoto(p)} alt="" className="size-full object-cover transition-transform duration-300 group-active:scale-105" />
+                </div>
+                <div className="space-y-1 p-3">
+                  <p className="line-clamp-1 text-sm font-semibold leading-tight">{p.name}</p>
+                  <p className="line-clamp-2 min-h-8 text-[11px] leading-snug text-muted-foreground">{menuBlurb(p)}</p>
+                  <p className="price-glow text-sm font-semibold tabular-nums">{formatIDR(p.price)}</p>
+                </div>
+              </button>
+              <div className="px-3 pb-3">
+                <button
+                  type="button"
+                  disabled={sold}
+                  onClick={() => openPick(p)}
+                  className={cn("cta h-9 w-full rounded-full text-sm", sold && "opacity-40")}
+                >
+                  {sold ? "Habis" : "Add"}
+                </button>
               </div>
-              <div className="space-y-1 p-3">
-                <p className="line-clamp-1 font-medium leading-tight">{p.name}</p>
-                <p className="line-clamp-2 text-xs text-muted-foreground">{menuBlurb(p)}</p>
-                <span className="mt-1 inline-flex h-9 w-full items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
-                  {sold ? "Habis" : "Tambah"}
-                </span>
-              </div>
-            </button>
+            </article>
           );
         })}
       </main>
 
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="pointer-events-auto glass-deep mx-auto flex max-w-lg items-center gap-3 rounded-[22px] p-2.5 pl-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-muted-foreground">{totals.qty} item</p>
+            <p className="truncate text-lg font-semibold tabular-nums leading-tight">{formatIDR(totals.total)}</p>
+          </div>
+          <button type="button" className="cta h-11 shrink-0 rounded-full px-4 text-sm" onClick={() => (cart.length ? sendToPos() : setTray(true))}>
+            Checkout to POS
+          </button>
+        </div>
+      </div>
+
       {pick ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/50" onClick={() => setPick(null)}>
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55" onClick={() => setPick(null)}>
           <div
-            className="glass max-h-[88dvh] w-full overflow-auto rounded-t-[28px] p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            className="glass-deep sheet-in max-h-[88dvh] w-full overflow-auto rounded-t-[28px] p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
             <div className="flex gap-3">
-              <img src={menuPhoto(pick)} alt="" className="size-24 rounded-[18px] object-cover" />
+              <img src={menuPhoto(pick)} alt="" className="size-24 rounded-2xl object-cover" />
               <div className="min-w-0 flex-1">
-                <p className="font-display text-xl leading-tight">{pick.name}</p>
+                <p className="text-xl font-semibold leading-tight">{pick.name}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{menuBlurb(pick)}</p>
-                <p className="mt-2 font-mono tabular-nums">{formatIDR(pick.price + extraSum)}</p>
+                <p className="price-glow mt-2 font-semibold tabular-nums">{formatIDR(pick.price + extraSum)}</p>
               </div>
-              <button type="button" className="grid size-11 place-items-center rounded-full glass" onClick={() => setPick(null)}>
+              <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => setPick(null)}>
                 <X className="size-4" />
               </button>
             </div>
             {pick.category !== "Food" && pick.category !== "Water" ? (
               <>
-                <p className="mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Es</p>
+                <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Ice</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {ICE.map((v) => (
-                    <button key={v} type="button" onClick={() => setIce(v)} className={cn("glass h-11 rounded-full px-3 text-sm", ice === v && "glass-hot")}>
+                    <button key={v} type="button" onClick={() => setIce(v)} className={cn("glass h-10 rounded-full px-3 text-sm", ice === v && "glass-hot")}>
                       {v}
                     </button>
                   ))}
                 </div>
-                <p className="mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Gula</p>
+                <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Sugar</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {SUGAR.map((v) => (
-                    <button key={v} type="button" onClick={() => setSugar(v)} className={cn("glass h-11 rounded-full px-3 text-sm", sugar === v && "glass-hot")}>
+                    <button key={v} type="button" onClick={() => setSugar(v)} className={cn("glass h-10 rounded-full px-3 text-sm", sugar === v && "glass-hot")}>
                       {v}
                     </button>
                   ))}
@@ -187,7 +221,7 @@ export function GuestMenu() {
             ) : null}
             {addonPool.length ? (
               <>
-                <p className="mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Tambahan</p>
+                <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Modifiers</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {addonPool.map((a) => {
                     const on = extras.includes(a.id);
@@ -196,7 +230,7 @@ export function GuestMenu() {
                         key={a.id}
                         type="button"
                         onClick={() => setExtras((xs) => (on ? xs.filter((id) => id !== a.id) : [...xs, a.id]))}
-                        className={cn("glass h-11 rounded-full px-3 text-sm", on && "glass-hot")}
+                        className={cn("glass h-10 rounded-full px-3 text-sm", on && "glass-hot")}
                       >
                         {a.name}
                         {a.price ? ` · ${formatIDR(a.price)}` : ""}
@@ -206,35 +240,29 @@ export function GuestMenu() {
                 </div>
               </>
             ) : null}
-            <Input className="mt-4 h-11 rounded-2xl bg-transparent" placeholder="Catatan untuk barista / dapur" value={note} onChange={(e) => setNote(e.target.value)} />
-            <Button className="mt-4 h-12 w-full rounded-full text-base" onClick={addPicked}>
-              Tambah ke pesanan kasir
-            </Button>
+            <Input className="glass mt-4 h-11 rounded-2xl border-white/10 bg-transparent" placeholder="Notes for barista" value={note} onChange={(e) => setNote(e.target.value)} />
+            <button type="button" className="cta mt-4 h-12 w-full rounded-full text-base" onClick={addPicked}>
+              Add to Order
+            </button>
           </div>
         </div>
       ) : null}
 
       {tray ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/50" onClick={() => setTray(false)}>
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55" onClick={() => setTray(false)}>
           <div
-            className="glass max-h-[80dvh] w-full overflow-auto rounded-t-[28px] p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            className="glass-deep sheet-in max-h-[80dvh] w-full overflow-auto rounded-t-[28px] p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-xl">Pesanan kamu</h2>
-              <button type="button" className="grid size-11 place-items-center rounded-full glass" onClick={() => setTray(false)}>
+              <h2 className="text-xl font-semibold">Your order</h2>
+              <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => setTray(false)}>
                 <X className="size-4" />
               </button>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">Langsung tampil di kasir. Bayar di meja kasir.</p>
             <div className="mt-3 flex gap-2">
               {(["Dine In", "Takeaway"] as OrderType[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setOrderType(t)}
-                  className={cn("glass h-11 flex-1 rounded-full text-sm", orderType === t && "glass-hot")}
-                >
+                <button key={t} type="button" onClick={() => setOrderType(t)} className={cn("glass h-11 flex-1 rounded-full text-sm", orderType === t && "glass-hot")}>
                   {t === "Dine In" ? "Dine in" : "Takeaway"}
                 </button>
               ))}
@@ -242,12 +270,7 @@ export function GuestMenu() {
             {orderType === "Dine In" ? (
               <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
                 {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setTable(n)}
-                    className={cn("glass h-11 w-11 shrink-0 rounded-full text-sm", table === n && "glass-hot")}
-                  >
+                  <button key={n} type="button" onClick={() => setTable(n)} className={cn("glass size-11 shrink-0 rounded-full text-sm", table === n && "glass-hot")}>
                     {n}
                   </button>
                 ))}
@@ -255,21 +278,21 @@ export function GuestMenu() {
             ) : null}
             <ul className="mt-4 space-y-2">
               {cart.length === 0 ? (
-                <li className="py-8 text-center text-sm text-muted-foreground">Belum ada item.</li>
+                <li className="py-8 text-center text-sm text-muted-foreground">Keranjang kosong.</li>
               ) : (
                 cart.map((item) => (
-                  <li key={item.key} className="glass flex items-center gap-3 rounded-[20px] p-3">
+                  <li key={item.key} className="glass flex items-center gap-3 rounded-2xl p-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium leading-tight">{item.name}</p>
                       {item.note ? <p className="text-xs text-muted-foreground">{item.note}</p> : null}
-                      <p className="font-mono text-xs tabular-nums">{formatIDR(item.price * item.qty)}</p>
+                      <p className="price-glow text-xs font-medium tabular-nums">{formatIDR(item.price * item.qty)}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button type="button" className="grid size-11 place-items-center rounded-full glass" onClick={() => changeQty(item.key, -1)}>
+                      <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => changeQty(item.key, -1)}>
                         <Minus className="size-4" />
                       </button>
                       <span className="w-6 text-center tabular-nums">{item.qty}</span>
-                      <button type="button" className="grid size-11 place-items-center rounded-full glass" onClick={() => { changeQty(item.key, 1); nudgeCloud(); }}>
+                      <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => { changeQty(item.key, 1); nudgeCloud(); }}>
                         <Plus className="size-4" />
                       </button>
                     </div>
@@ -280,11 +303,9 @@ export function GuestMenu() {
                 ))
               )}
             </ul>
-            <div className="mt-4 flex items-end justify-between">
-              <p className="text-sm text-muted-foreground">{totals.qty} item</p>
-              <p className="font-display text-2xl tabular-nums">{formatIDR(totals.total)}</p>
-            </div>
-            <p className="mt-3 rounded-[18px] glass px-3 py-2 text-center text-sm">Serahkan ke kasir untuk bayar. Jangan tutup halaman ini.</p>
+            <button type="button" className="cta mt-4 h-12 w-full rounded-full text-base" onClick={sendToPos}>
+              Checkout to POS
+            </button>
           </div>
         </div>
       ) : null}
