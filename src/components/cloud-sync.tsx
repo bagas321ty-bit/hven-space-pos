@@ -41,12 +41,8 @@ async function pushNow(payload: CloudPayload) {
     payload,
   });
   if (res.ok) {
-    lastFingerprint = payloadFingerprint(res.payload ?? payload);
-    if (res.payload) {
-      s.applyCloud(res.payload, res.rev, res.updatedAt);
-    } else {
-      s.setCloudMeta({ cloudRev: res.rev, cloudAt: res.updatedAt, cloudStatus: "ok", cloudError: "" });
-    }
+    lastFingerprint = payloadFingerprint(currentPayload());
+    s.setCloudMeta({ cloudRev: res.rev, cloudAt: res.updatedAt, cloudStatus: "ok", cloudError: "" });
     return true;
   }
   if (res.conflict && res.payload) {
@@ -91,6 +87,11 @@ export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local")
   try {
     const s0 = usePos.getState();
     if (!s0.deviceId) s0.setCloudMeta({ deviceId: newDeviceId() });
+
+    if (reason === "local" || reason === "manual") {
+      const pushed = await pushNow(currentPayload());
+      if (!pushed) return;
+    }
 
     const pulled = await pullCloudClient(VENUE_PASS_SHA256);
     if (!pulled.ok) {

@@ -80,7 +80,7 @@ import { isGajiCat, isPriveCat, mergeSheetBooks, SHEET_SYNC } from "@/lib/sheet-
 import { slimAttendance } from "@/lib/att-photo-slim";
 import type { WaMode } from "@/lib/whatsapp";
 import type { CloudPayload } from "@/lib/pos-cloud";
-import { expenseKey, settleExpenses } from "@/lib/pos-cloud";
+import { expenseKey, keepById, settleExpenses } from "@/lib/pos-cloud";
 import { nudgeCloud } from "@/lib/cloud-nudge";
 import { ringKds } from "@/lib/kds-chime";
 
@@ -2060,12 +2060,12 @@ export const usePos = create<AppState>()(
             (p) => !(payload.productGone ?? get().productGone ?? []).includes(p.id),
           ),
           menuCategories: ensureMenuCategories(payload.menuCategories, payload.products),
-          orders: payload.orders,
-          expenses: settleExpenses(keepExpensePay(payload.expenses ?? [], get().expenses), payload.expenseGone ?? get().expenseGone),
+          orders: keepById(payload.orders, get().orders),
+          expenses: settleExpenses(keepExpensePay(keepById(payload.expenses ?? [], get().expenses), get().expenses), payload.expenseGone ?? get().expenseGone),
           expenseGone: payload.expenseGone ?? get().expenseGone ?? [],
           productGone: payload.productGone ?? get().productGone ?? [],
-          incomes: payload.incomes,
-          incidents: payload.incidents,
+          incomes: keepById(payload.incomes, get().incomes),
+          incidents: keepById(payload.incidents, get().incidents),
           inventory: payload.inventory.map(normalizeIngredient),
           staff: payload.staff,
           attendance: payload.attendance,
@@ -2095,8 +2095,8 @@ export const usePos = create<AppState>()(
           priveWeeklyCap: payload.priveWeeklyCap ?? get().priveWeeklyCap,
           managerCashCap: cap,
           managerCash: (payload.managerCash ?? []).map((r) => normalizeManagerCash(r, cap)),
-          moneyBooks: replayMoney(accrueSisih(payload.ledger ?? get().ledger, todayISO(), payload.sisihGajiPerDay ?? get().sisihGajiPerDay)),
-          ledger: accrueSisih(payload.ledger ?? get().ledger, todayISO(), payload.sisihGajiPerDay ?? get().sisihGajiPerDay),
+          moneyBooks: replayMoney(accrueSisih(keepById(payload.ledger, get().ledger), todayISO(), payload.sisihGajiPerDay ?? get().sisihGajiPerDay)),
+          ledger: accrueSisih(keepById(payload.ledger, get().ledger), todayISO(), payload.sisihGajiPerDay ?? get().sisihGajiPerDay),
           workShifts: ensureWorkShifts(payload.workShifts),
           shiftLogs: payload.shiftLogs ?? [],
           cart: Array.isArray(payload.cart) ? payload.cart : get().cart,

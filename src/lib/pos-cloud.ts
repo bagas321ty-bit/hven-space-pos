@@ -273,6 +273,17 @@ function dedupeExpenses(rows: Expense[]): Expense[] {
   return [...m.values()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? 1 : -1));
 }
 
+export function keepById<T extends { id: string }>(incoming: T[] | undefined, prev: T[] | undefined): T[] {
+  const m = new Map<string, T>();
+  for (const x of incoming ?? []) {
+    if (x?.id) m.set(x.id, x);
+  }
+  for (const x of prev ?? []) {
+    if (x?.id && !m.has(x.id)) m.set(x.id, x);
+  }
+  return [...m.values()];
+}
+
 export function settleExpenses(rows: Expense[], gone: string[] = []): Expense[] {
   const drop = new Set(gone);
   return dedupeExpenses(rows).filter((e) => !drop.has(e.id));
@@ -348,8 +359,8 @@ export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudP
     managerCash: unionById(local.managerCash, remote.managerCash, (a, b) =>
       (a.deposited ?? 0) >= (b.deposited ?? 0) ? a : b,
     ),
-    ledger: unionById(local.ledger, remote.ledger, (a, b) => a).slice(0, 400),
-    moneyBooks: replayMoney(unionById(local.ledger, remote.ledger, (a, b) => a)),
+    ledger: unionById(local.ledger, remote.ledger, (a, b) => (a.at >= b.at ? a : b)),
+    moneyBooks: replayMoney(unionById(local.ledger, remote.ledger, (a, b) => (a.at >= b.at ? a : b))),
     workShifts: unionById(local.workShifts, remote.workShifts, (a, b) => (preferLocal ? a : b)),
     shiftLogs: unionById(local.shiftLogs, remote.shiftLogs, (a, b) => a).slice(0, 200),
     ...mergeCartFields(local, remote),

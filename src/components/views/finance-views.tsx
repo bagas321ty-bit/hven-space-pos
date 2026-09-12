@@ -1553,7 +1553,8 @@ export function RekeningView() {
             const msg = setorGopay(n, gopayNote);
             if (msg) toast.error(msg);
             else {
-              toast.success(`Setor GoPay ${formatIDR(n)} masuk rekening`);
+              const saldo = replayMoney(usePos.getState().ledger).rekening;
+              toast.success(`Setor GoPay ${formatIDR(n)} · rekening ${formatIDR(saldo)}`);
               setGopayAmt("");
               setGopayNote("");
               await runCloudSync("local");
