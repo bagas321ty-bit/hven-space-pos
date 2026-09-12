@@ -72,7 +72,9 @@ export function PaymentModal() {
       setMethod("Cash");
       setTendered(t.total);
     }
-  }, [open, t.total]);
+    // hanya saat buka modal — jangan reset saat total berubah
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const change = method === "Cash" ? Math.max(0, tendered - t.total) : 0;
   const methods: PaymentMethod[] = ["Cash", "QRIS", "Debit", "Transfer"];
@@ -332,7 +334,6 @@ export function ProductFormModal() {
   const editing = usePos((s) => s.editingProduct);
   const upsert = usePos((s) => s.upsertProduct);
   const inventory = usePos((s) => s.inventory);
-  const recipes = usePos((s) => s.recipes);
   const setProductRecipes = usePos((s) => s.setProductRecipes);
   const setEditingProduct = usePos((s) => s.setEditingProduct);
   const menuCategories = usePos((s) => s.menuCategories);
@@ -349,20 +350,23 @@ export function ProductFormModal() {
   const [blurb, setBlurb] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
   const [lines, setLines] = useState<{ ingredientId: string; qty: number }[]>([]);
+  const editingId = editing?.id ?? "";
 
   useEffect(() => {
     if (!open) return;
-    if (editing) {
-      setId(editing.id);
-      setName(editing.name);
-      setCat(editing.category);
-      setPrice(editing.price);
-      setCogs(editing.cogs);
-      setStock(editing.stock);
-      setKitchen(editing.kitchen);
-      setImage(editing.image ?? "");
-      setBlurb(editing.blurb ?? "");
-      setLines(recipes.filter((r) => r.productId === editing.id).map((r) => ({ ingredientId: r.ingredientId, qty: r.qty })));
+    const cur = usePos.getState().editingProduct;
+    const rec = usePos.getState().recipes;
+    if (cur) {
+      setId(cur.id);
+      setName(cur.name);
+      setCat(cur.category);
+      setPrice(cur.price);
+      setCogs(cur.cogs);
+      setStock(cur.stock);
+      setKitchen(cur.kitchen);
+      setImage(cur.image ?? "");
+      setBlurb(cur.blurb ?? "");
+      setLines(rec.filter((r) => r.productId === cur.id).map((r) => ({ ingredientId: r.ingredientId, qty: r.qty })));
     } else {
       setId(uid("m"));
       setName("");
@@ -376,7 +380,7 @@ export function ProductFormModal() {
       setLines([]);
     }
     setNewCat("");
-  }, [open, editing, recipes]);
+  }, [open, editingId]);
 
   const recipeCost = lines.reduce((s, l) => {
     const ing = inventory.find((i) => i.id === l.ingredientId);

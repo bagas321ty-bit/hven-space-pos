@@ -72,6 +72,7 @@ def save_doc(doc: dict) -> None:
 
 
 KEEP_FIELDS = ("image", "blurb", "pay", "nota", "updatedAt")
+CATALOG_FIELDS = ("name", "category", "price", "cogs", "blurb", "kitchen", "available", "icon", "sku", "image")
 
 
 def merge_row(incoming: dict, stored: dict | None) -> dict:
@@ -82,6 +83,32 @@ def merge_row(incoming: dict, stored: dict | None) -> dict:
     for key in KEEP_FIELDS:
         if not incoming.get(key) and stored.get(key):
             out[key] = stored[key]
+    return out
+
+
+def merge_product(incoming: dict, stored: dict | None) -> dict:
+    if not stored:
+        return incoming
+    it = str(incoming.get("updatedAt") or "")
+    st = str(stored.get("updatedAt") or "")
+    newer, older = (incoming, stored) if it >= st else (stored, incoming)
+    out = dict(older)
+    out.update(newer)
+    for key in CATALOG_FIELDS:
+        val = newer.get(key)
+        if val in (None, ""):
+            val = older.get(key)
+        if val not in (None, ""):
+            out[key] = val
+    try:
+        out["stock"] = min(int(incoming.get("stock") or 0), int(stored.get("stock") or 0))
+    except (TypeError, ValueError):
+        out["stock"] = newer.get("stock", older.get("stock"))
+    try:
+        out["soldQty"] = max(int(incoming.get("soldQty") or 0), int(stored.get("soldQty") or 0))
+    except (TypeError, ValueError):
+        out["soldQty"] = newer.get("soldQty", older.get("soldQty"))
+    out["updatedAt"] = it if it >= st else st
     return out
 
 
@@ -96,13 +123,28 @@ def union_id(incoming: list, stored: list) -> list:
     return list(m.values())
 
 
+def union_products(incoming: list, stored: list) -> list:
+    m: dict[str, dict] = {}
+    for row in stored or []:
+        if isinstance(row, dict) and isinstance(row.get("id"), str):
+            m[row["id"]] = row
+    for row in incoming or []:
+        if isinstance(row, dict) and isinstance(row.get("id"), str):
+            m[row["id"]] = merge_product(row, m.get(row["id"]))
+    return list(m.values())
+
+
 def merge_payload(incoming: dict, stored: dict | None) -> dict:
     if not stored:
         return incoming
     out = dict(stored)
     out.update({k: v for k, v in incoming.items() if not isinstance(v, list)})
     for key in LIST_KEYS:
-        if key in incoming or key in stored:
+        if key not in incoming and key not in stored:
+            continue
+        if key == "products":
+            out[key] = union_products(incoming.get(key) or [], stored.get(key) or [])
+        else:
             out[key] = union_id(incoming.get(key) or [], stored.get(key) or [])
     cats = []
     for c in (stored.get("menuCategories") or []) + (incoming.get("menuCategories") or []):

@@ -1582,9 +1582,12 @@ export const usePos = create<AppState>()(
         const list = get().products;
         const i = list.findIndex((x) => x.id === p.id);
         const prev = i >= 0 ? list[i] : undefined;
+        const name = (p.name ?? prev?.name ?? "").trim();
+        if (!name) return;
         const row = {
           ...prev,
           ...p,
+          name,
           blurb: (p.blurb ?? prev?.blurb ?? "").trim() || undefined,
           image: p.image || prev?.image,
           updatedAt: new Date().toISOString(),

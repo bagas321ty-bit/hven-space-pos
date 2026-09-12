@@ -27,7 +27,7 @@ import type {
 } from "@/lib/types";
 import { SEED_MONEY, replayMoney } from "@/lib/types";
 import type { WaMode } from "@/lib/whatsapp";
-import { SAMPLE_ORDERS, PRODUCTS } from "@/data/seed";
+import { SAMPLE_ORDERS } from "@/data/seed";
 import { slimAttendance } from "@/lib/att-photo-slim";
 import { slimMenuImage, pickMenuImage } from "@/lib/menu-photos";
 
@@ -179,23 +179,27 @@ function pickOrder(a: Order, b: Order): Order {
 }
 
 function pickProduct(a: Product, b: Product): Product {
-  const seed = PRODUCTS.find((p) => p.id === a.id);
   const sold = Math.max(a.soldQty ?? 0, b.soldQty ?? 0);
   const stock = Math.min(a.stock ?? 0, b.stock ?? 0);
   const aT = a.updatedAt ?? "";
   const bT = b.updatedAt ?? "";
-  const changed = (p: Product) =>
-    !seed ||
-    p.price !== seed.price ||
-    p.name !== seed.name ||
-    p.category !== seed.category ||
-    p.available !== seed.available ||
-    Boolean(p.image) ||
-    Boolean(p.blurb);
-  const named = aT || bT ? (bT > aT ? b : a) : changed(a) && !changed(b) ? a : changed(b) && !changed(a) ? b : (a.soldQty ?? 0) >= (b.soldQty ?? 0) ? a : b;
-  const image = pickMenuImage(a.image, b.image) || named.image;
-  const blurb = (bT > aT ? b.blurb || a.blurb : a.blurb || b.blurb) || named.blurb;
-  return { ...named, stock, soldQty: sold, available: named.available, image, blurb: (blurb ?? "").trim() || named.blurb, updatedAt: bT > aT ? bT : aT || named.updatedAt };
+  const newer = bT > aT ? b : a;
+  const older = bT > aT ? a : b;
+  return {
+    ...older,
+    ...newer,
+    name: (newer.name || older.name || "").trim() || newer.name,
+    category: newer.category || older.category,
+    price: newer.price || older.price,
+    cogs: newer.cogs ?? older.cogs,
+    blurb: (newer.blurb || older.blurb || "").trim() || newer.blurb,
+    kitchen: newer.kitchen,
+    available: newer.available,
+    image: pickMenuImage(a.image, b.image) || newer.image || older.image,
+    stock,
+    soldQty: sold,
+    updatedAt: bT > aT ? bT : aT || newer.updatedAt,
+  };
 }
 
 function pickExpense(a: Expense, b: Expense, preferLocal: boolean): Expense {

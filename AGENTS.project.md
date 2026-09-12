@@ -14,7 +14,7 @@ Kalau dilewati, input kelihatan masuk lalu hilang (HP manager vs laptop).
 7. **Jangan `applyCloud` setelah push sukses.** Itu yang menimpa setor GoPay. Push dulu (`reason: "local"`), pull lalu `keepById` dengan state lokal.
 8. **Foto besar lewat gudang foto**, bukan JSON (`flushMenuPhotos` / absen). JSON hanya marker `cloud:id`.
 9. **Python VPS `LIST_KEYS` + `KEEP_FIELDS`** ikut field baru (`image`, `blurb`, `pay`, `nota`, `updatedAt`). String-list tombstone (`expenseGone`) merge terpisah, bukan `union_id`.
-10. **Persist `partialize` + `merge`** harus menyimpan field itu. Kalau tidak, refresh browser mengembalikan seed.
+11. **Form `useEffect` jangan bergantung ke array store** (`recipes`, `products`, `orders`). Sync 3 detik akan mereset nama/deskripsi yang sedang diketik. Reset form hanya saat modal buka / id record berubah.
 
 ## Pola uang rekening
 
