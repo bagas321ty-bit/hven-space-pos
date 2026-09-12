@@ -26,6 +26,7 @@ function currentPayload(): CloudPayload {
 }
 
 let busy = false;
+let queued: "boot" | "poll" | "manual" | "local" | null = null;
 let lastFingerprint = "";
 let skipPushUntil = 0;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -76,7 +77,10 @@ async function pushNow(payload: CloudPayload) {
 }
 
 export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local"): Promise<void> {
-  if (busy) return;
+  if (busy) {
+    queued = reason;
+    return;
+  }
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     usePos.getState().setCloudMeta({ cloudStatus: "offline", cloudError: "Tidak ada internet." });
     return;
@@ -135,6 +139,9 @@ export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local")
     });
   } finally {
     busy = false;
+    const next = queued;
+    queued = null;
+    if (next) void runCloudSync(next);
     void (async () => {
       try {
         const off = await offloadAttendanceList(usePos.getState().attendance);
@@ -193,13 +200,43 @@ export function CloudSync() {
       schedulePush();
     });
     onCloudNudge(() => {
-      schedulePush();
+      void runCloudSync("local");
     });
+
+    const ch = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("hven-live") : null;
+    const unsubLive = usePos.subscribe((s, prev) => {
+      if (!ch || s.cloudApplying) return;
+      if (s.orders === prev.orders) return;
+      try {
+        ch.postMessage({
+          kind: "orders",
+          orders: s.orders,
+          device: s.deviceId,
+        });
+      } catch {
+        /* ignore */
+      }
+    });
+    const onLive = (ev: MessageEvent) => {
+      const data = ev.data as { kind?: string; orders?: CloudPayload["orders"] };
+      if (data?.kind !== "orders" || !Array.isArray(data.orders)) return;
+      const local = currentPayload();
+      const merged = mergePayloads(local, { ...local, orders: data.orders });
+      if (payloadFingerprint(merged) === payloadFingerprint(local)) return;
+      usePos.getState().applyCloud(merged, usePos.getState().cloudRev, usePos.getState().cloudAt);
+    };
+    ch?.addEventListener("message", onLive);
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "hven-pos-v3" || !e.newValue) return;
+      void runCloudSync("poll");
+    };
+    window.addEventListener("storage", onStorage);
 
     const poll = window.setInterval(() => {
       if (document.visibilityState === "hidden") return;
       void runCloudSync("poll");
-    }, 20000);
+    }, 3000);
 
     const onVis = () => {
       if (document.visibilityState === "visible") void runCloudSync("poll");
@@ -216,6 +253,10 @@ export function CloudSync() {
     return () => {
       stopped = true;
       unsub();
+      unsubLive();
+      ch?.removeEventListener("message", onLive);
+      ch?.close();
+      window.removeEventListener("storage", onStorage);
       window.clearInterval(poll);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("online", onOnline);

@@ -158,6 +158,10 @@ function mergeOrderMeta(winner: Order, other: Order): Order {
 function pickOrder(a: Order, b: Order): Order {
   if (a.status === "void") return mergeOrderMeta(a, b);
   if (b.status === "void") return mergeOrderMeta(b, a);
+  const rank: Record<string, number> = { pending: 0, open: 1, paid: 2, void: 3 };
+  const ar = rank[a.status] ?? 0;
+  const br = rank[b.status] ?? 0;
+  if (ar !== br) return mergeOrderMeta(ar > br ? a : b, ar > br ? b : a);
   const ak = KDS[a.kdsStatus] ?? 0;
   const bk = KDS[b.kdsStatus] ?? 0;
   if (ak !== bk) return mergeOrderMeta(ak > bk ? a : b, ak > bk ? b : a);
@@ -367,7 +371,7 @@ export function payloadFingerprint(p: CloudPayload): string {
   const inc = p.incomes.map((e) => `${e.id}:${e.date}:${e.amount}`).join(",");
   const cash = p.managerCash.map((e) => `${e.id}:${e.deposited ?? 0}`).join(",");
   return [
-    p.orders.length,
+    p.orders.map((o) => `${o.id}:${o.status}:${o.kdsStatus}:${o.updatedAt ?? ""}`).join(","),
     p.products.length,
     exp,
     inc,

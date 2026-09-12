@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { runCloudSync } from "@/components/cloud-sync";
 import { ADDONS } from "@/data/seed";
 import { formatIDR } from "@/lib/format";
 import { menuBlurb, menuPhoto } from "@/lib/menu-photos";
@@ -158,6 +159,7 @@ export function GuestMenu() {
     setWaitId(res.order.id);
     setBag([]);
     setTray(true);
+    void runCloudSync("local");
     toast.success("Menunggu kasir konfirmasi bayar.");
   };
 
