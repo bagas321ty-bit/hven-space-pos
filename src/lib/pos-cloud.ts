@@ -21,6 +21,7 @@ import type {
   WeeklyRow,
   WorkShift,
   ShiftChangeLog,
+  CartItem,
 } from "@/lib/types";
 import type { WaMode } from "@/lib/whatsapp";
 import { SAMPLE_ORDERS, PRODUCTS } from "@/data/seed";
@@ -66,6 +67,8 @@ export interface CloudPayload {
   managerCash: ManagerCashLog[];
   workShifts: WorkShift[];
   shiftLogs: ShiftChangeLog[];
+  cart: CartItem[];
+  cartEpoch: number;
 }
 
 export interface CloudDoc {
@@ -297,6 +300,21 @@ export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudP
     ),
     workShifts: unionById(local.workShifts, remote.workShifts, (a, b) => (preferLocal ? a : b)),
     shiftLogs: unionById(local.shiftLogs, remote.shiftLogs, (a, b) => a).slice(0, 200),
+    ...mergeCartFields(local, remote),
+  };
+}
+
+function mergeCartFields(local: CloudPayload, remote: CloudPayload): { cart: CartItem[]; cartEpoch: number } {
+  const le = typeof local.cartEpoch === "number" ? local.cartEpoch : 0;
+  const re = typeof remote.cartEpoch === "number" ? remote.cartEpoch : 0;
+  if (le !== re) {
+    return le > re
+      ? { cart: local.cart ?? [], cartEpoch: le }
+      : { cart: remote.cart ?? [], cartEpoch: re };
+  }
+  return {
+    cart: unionByKey(local.cart, remote.cart, (x) => x.key, (a, b) => (a.qty >= b.qty ? a : b)),
+    cartEpoch: le,
   };
 }
 
@@ -339,6 +357,8 @@ export function extractPayload(s: CloudPayload): CloudPayload {
     managerCash: s.managerCash,
     workShifts: s.workShifts,
     shiftLogs: s.shiftLogs,
+    cart: s.cart ?? [],
+    cartEpoch: s.cartEpoch ?? 0,
   };
 }
 
@@ -362,5 +382,7 @@ export function payloadFingerprint(p: CloudPayload): string {
     p.sheetSync,
     p.moneyIn.length,
     p.recipes.length,
+    p.cartEpoch ?? 0,
+    (p.cart ?? []).map((i) => `${i.key}:${i.qty}`).join(","),
   ].join("/");
 }

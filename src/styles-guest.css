@@ -1,0 +1,39 @@
+.guest-kiosk {
+  --gk-bg0: #07080c;
+  --gk-bg1: #10161c;
+  --gk-glass: color-mix(in oklab, white 16%, transparent);
+  --gk-glass-2: color-mix(in oklab, white 22%, transparent);
+  --gk-stroke: color-mix(in oklab, white 18%, transparent);
+  --gk-stroke-hot: color-mix(in oklab, var(--color-primary) 55%, white 20%);
+  --gk-blur: 16px;
+  --gk-text: #f6f1ea;
+  --gk-muted: color-mix(in oklab, #f6f1ea 62%, transparent);
+  font-family: "Plus Jakarta Sans", var(--font-sans), system-ui, sans-serif;
+  color: var(--gk-text);
+  min-height: 100dvh;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, color-mix(in oklab, #1b3a36 45%, transparent), transparent 60%),
+    radial-gradient(900px 500px at 110% 8%, color-mix(in oklab, #c9a87c 22%, transparent), transparent 55%),
+    radial-gradient(800px 700px at 50% 120%, color-mix(in oklab, #1a2744 50%, transparent), transparent 50%),
+    var(--gk-bg0);
+}
+
+.guest-kiosk .glass {
+  background: var(--gk-glass);
+  backdrop-filter: blur(var(--gk-blur)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--gk-blur)) saturate(1.2);
+  border: 1px solid var(--gk-stroke);
+}
+
+.guest-kiosk .glass-hot {
+  background: color-mix(in oklab, var(--color-primary) 18%, transparent);
+  box-shadow: 0 0 24px color-mix(in oklab, var(--color-primary) 35%, transparent);
+  border-color: var(--gk-stroke-hot);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guest-kiosk * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

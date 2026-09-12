@@ -357,6 +357,12 @@ export function AppShell() {
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <a
+              href="/pesan"
+              className="hidden h-8 items-center rounded-md border border-border px-2 text-xs text-muted-foreground hover:text-foreground sm:inline-flex"
+            >
+              Menu tamu
+            </a>
             <CloudSyncBadge compact />
             <div className="relative hidden sm:block">
               <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />

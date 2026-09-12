@@ -100,6 +100,9 @@ export function LoginScreen({ pending }: { pending?: boolean }) {
           <a href="/pembukuan" className="block text-center text-xs text-muted-foreground hover:text-foreground">
             Buka portal pembukuan →
           </a>
+          <a href="/pesan" className="block text-center text-xs text-primary hover:underline">
+            Buka menu tamu (tablet depan kasir) →
+          </a>
           <div className="flex justify-center pt-1">
             <CloudSyncBadge />
           </div>

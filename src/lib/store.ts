@@ -202,6 +202,7 @@ export interface AppState {
   cloudStatus: "idle" | "syncing" | "ok" | "error" | "offline";
   cloudError: string;
   cloudApplying: boolean;
+  cartEpoch: number;
 
   setView: (view: ViewId) => void;
   purgeTestData: () => void;
@@ -428,6 +429,7 @@ export const usePos = create<AppState>()(
       recipes: RECIPES,
       addons: ADDONS,
       cart: [],
+      cartEpoch: 0,
       openBillId: null,
       orderType: "Dine In",
       table: "01",
@@ -749,6 +751,7 @@ export const usePos = create<AppState>()(
             kitchen: product.kitchen,
           });
         set({ cart });
+        nudgeCloud();
       },
       changeQty: (key, delta) => {
         const cart = get()
@@ -760,6 +763,7 @@ export const usePos = create<AppState>()(
       clearCart: () =>
         set({
           cart: [],
+          cartEpoch: get().cartEpoch + 1,
           discount: 0,
           discountLabel: "",
           discountReason: "",
@@ -918,6 +922,7 @@ export const usePos = create<AppState>()(
           products: nextProducts,
           inventory: deductRecipes(get().inventory, added, get().recipes),
           cart: [],
+          cartEpoch: get().cartEpoch + 1,
           discount: 0,
           discountLabel: "",
           discountReason: "",
@@ -1678,6 +1683,8 @@ export const usePos = create<AppState>()(
           managerCash: (payload.managerCash ?? []).map((r) => normalizeManagerCash(r, cap)),
           workShifts: ensureWorkShifts(payload.workShifts),
           shiftLogs: payload.shiftLogs ?? [],
+          cart: Array.isArray(payload.cart) ? payload.cart : get().cart,
+          cartEpoch: typeof payload.cartEpoch === "number" ? payload.cartEpoch : get().cartEpoch,
           cloudRev: rev,
           cloudAt: at,
           cloudStatus: "ok",
@@ -1722,6 +1729,7 @@ export const usePos = create<AppState>()(
             : [],
           workShifts: ensureWorkShifts(p.workShifts && p.workShifts.length ? p.workShifts : WORK_SHIFTS),
           shiftLogs: p.shiftLogs ?? [],
+          cartEpoch: typeof p.cartEpoch === "number" ? p.cartEpoch : 0,
           attendance: (p.attendance ?? current.attendance).map((a) => ({
             ...a,
             valid: a.valid !== false,
@@ -1782,6 +1790,7 @@ export const usePos = create<AppState>()(
         sheetSync: s.sheetSync,
         adminPin: s.adminPin,
         cart: s.cart,
+        cartEpoch: s.cartEpoch,
         openBillId: s.openBillId,
         role: s.role,
         currentStaffId: s.currentStaffId,
