@@ -47,7 +47,8 @@ import {
   TargetView,
   TutupBukuView,
 } from "@/components/views/finance-views";
-import { formatDateID, formatTimeID, todayISO } from "@/lib/format";
+import { formatDateID, formatIDR, formatTimeID, todayISO } from "@/lib/format";
+import { playKdsChime } from "@/lib/kds-chime";
 import { isIngredientLow } from "@/lib/inventory";
 import { usePos } from "@/lib/store";
 import type { ViewId } from "@/lib/types";
@@ -187,7 +188,9 @@ export function AppShell() {
 
   const me = staff.find((s) => s.id === currentStaffId);
   const activeOrders = orders.filter((o) => o.status === "open" || (o.status === "paid" && o.kdsStatus !== "done")).length;
-  const kdsNew = orders.filter((o) => o.kdsStatus !== "done" && o.status !== "void" && o.items.some((i) => i.kitchen)).length;
+  const kdsNew = orders.filter((o) => o.status === "paid" && o.kdsStatus !== "done" && o.items.some((i) => i.kitchen)).length;
+  const pendingPay = orders.filter((o) => o.status === "pending");
+  const confirmGuestPay = usePos((s) => s.confirmGuestPay);
   const feedbackDue = orders.filter((o) => o.feedbackStatus === "due" && o.status !== "void").length;
   const lowStock = inventory.filter(isIngredientLow).length;
 
@@ -195,6 +198,12 @@ export function AppShell() {
     setClock(formatTimeID());
     const t = setInterval(() => setClock(formatTimeID()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const onChime = () => playKdsChime();
+    window.addEventListener("hven-kds-chime", onChime);
+    return () => window.removeEventListener("hven-kds-chime", onChime);
   }, []);
 
   useEffect(() => {
@@ -399,6 +408,24 @@ export function AppShell() {
             )}
           </div>
         </header>
+        {pendingPay.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-warning/40 bg-warning/10 px-3 py-2">
+            <p className="text-xs font-medium">Tunggu bayar tamu</p>
+            {pendingPay.slice(0, 4).map((o) => (
+              <Button
+                key={o.id}
+                size="sm"
+                onClick={() => {
+                  const msg = confirmGuestPay(o.id);
+                  if (msg) toast.error(msg);
+                  else toast.success(`${o.number} lunas · masuk KDS`);
+                }}
+              >
+                Konfirmasi {o.customer} · {o.payment} · {formatIDR(o.total)}
+              </Button>
+            ))}
+          </div>
+        )}
         <main className="min-h-0 flex-1 overflow-hidden">
           <ViewSwitch view={view} />
         </main>

@@ -76,6 +76,7 @@ import type { WaMode } from "@/lib/whatsapp";
 import type { CloudPayload } from "@/lib/pos-cloud";
 import { expenseKey, settleExpenses } from "@/lib/pos-cloud";
 import { nudgeCloud } from "@/lib/cloud-nudge";
+import { ringKds } from "@/lib/kds-chime";
 
 const memoryStore: Record<string, string> = {};
 
@@ -251,6 +252,14 @@ export interface AppState {
   setServiceEnabled: (v: boolean) => void;
   totals: () => { qty: number; subtotal: number; discount: number; service: number; tax: number; total: number };
   checkout: (method: PaymentMethod, tendered: number) => Order | null;
+  submitGuestOrder: (input: {
+    customer: string;
+    payment: PaymentMethod;
+    type: OrderType;
+    table: string;
+    items: CartItem[];
+  }) => { error: string } | { order: Order };
+  confirmGuestPay: (id: string) => string | null;
   parkBill: () => string | null;
   resumeBill: (id: string) => string | null;
   cancelOpenBill: (id: string) => string | null;
@@ -949,6 +958,119 @@ export const usePos = create<AppState>()(
           ],
         });
         return order;
+      },
+      submitGuestOrder: ({ customer, payment, type, table, items }) => {
+        const name = customer.trim();
+        if (!name) return { error: "Isi nama dulu." };
+        if (!items.length) return { error: "Keranjang kosong." };
+        for (const i of items) {
+          const p = get().products.find((x) => x.id === i.productId);
+          if (!p || !p.available || p.stock < i.qty) return { error: `${i.name} stok kurang.` };
+        }
+        const subtotal = items.reduce((s, c) => s + lineTotal(c), 0);
+        const taxOn = get().taxEnabled;
+        const serviceOn = type === "Dine In" ? get().serviceEnabled : false;
+        const service = serviceOn ? Math.round(subtotal * SERVICE_RATE) : 0;
+        const tax = taxOn ? Math.round((subtotal + service) * TAX_RATE) : 0;
+        const total = subtotal + service + tax;
+        const stamp = new Date().toISOString();
+        const seq = get().orders.length + 17;
+        const tag = todayISO().slice(5).replace("-", "");
+        const order: Order = {
+          id: uid("ord"),
+          number: `HV-${tag}-${String(seq).padStart(3, "0")}`,
+          createdAt: stamp,
+          updatedAt: stamp,
+          type,
+          table: type === "Dine In" ? table || "-" : "-",
+          customer: name,
+          items,
+          subtotal,
+          discount: 0,
+          discountLabel: "",
+          discountReason: "",
+          tax,
+          service,
+          taxExempt: !taxOn,
+          total,
+          payment,
+          tendered: 0,
+          change: 0,
+          status: "pending",
+          cashier: "Tamu",
+          kdsStatus: items.some((c) => c.kitchen) ? "new" : "done",
+        };
+        set({
+          orders: [order, ...get().orders],
+          notifications: [
+            {
+              id: uid("n"),
+              type: "SALE",
+              title: `Tunggu bayar ${order.number}`,
+              message: `${name} · ${payment} · ${formatIDR(total)}`,
+              time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }),
+              orderId: order.id,
+            },
+            ...get().notifications,
+          ],
+        });
+        nudgeCloud();
+        ringKds();
+        return { order };
+      },
+      confirmGuestPay: (id) => {
+        const o = get().orders.find((x) => x.id === id);
+        if (!o) return "Order tidak ditemukan.";
+        if (o.status !== "pending") return "Pesanan ini bukan antrean tamu.";
+        for (const i of o.items) {
+          const p = get().products.find((x) => x.id === i.productId);
+          if (!p || p.stock < i.qty) return `${i.name} stok kurang.`;
+        }
+        const cashier = get().staff.find((s) => s.id === get().currentStaffId)?.name ?? "Kasir";
+        const stamp = new Date().toISOString();
+        const paid: Order = {
+          ...o,
+          status: "paid",
+          cashier,
+          tendered: o.total,
+          change: 0,
+          updatedAt: stamp,
+          kdsStatus: o.items.some((c) => c.kitchen) ? "new" : "done",
+        };
+        const nextProducts = consumeStock(get().products, o.items, false).map((p) => {
+          const n = o.items.filter((c) => c.productId === p.id).reduce((s, c) => s + c.qty, 0);
+          return n ? { ...p, soldQty: p.soldQty + n } : p;
+        });
+        const shift = { ...get().shift };
+        if (o.payment === "Cash") shift.cashSales += o.total;
+        else shift.nonCashSales += o.total;
+        const dailySales = [...get().dailySales];
+        const today = todayISO();
+        const row = dailySales.find((d) => d.date === today);
+        if (row) row.omzet += o.total;
+        else dailySales.push({ date: today, omzet: o.total });
+        set({
+          orders: get().orders.map((x) => (x.id === id ? paid : x)),
+          products: nextProducts,
+          inventory: deductRecipes(get().inventory, o.items, get().recipes),
+          shift,
+          lastReceipt: paid,
+          dailySales,
+          notifications: [
+            {
+              id: uid("n"),
+              type: "SALE",
+              title: `Order ${paid.number} lunas`,
+              message: `${paid.customer} · ${paid.payment} · ke KDS`,
+              time: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }),
+              orderId: paid.id,
+            },
+            ...get().notifications,
+          ],
+        });
+        nudgeCloud();
+        ringKds();
+        return null;
       },
       parkBill: () => {
         const { cart, orderType, table, customer, currentStaffId, staff, openBillId, taxEnabled, serviceEnabled, discount, discountLabel, discountReason } = get();

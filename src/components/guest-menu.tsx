@@ -3,11 +3,10 @@ import { Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { ADDONS } from "@/data/seed";
-import { nudgeCloud } from "@/lib/cloud-nudge";
 import { formatIDR } from "@/lib/format";
 import { menuBlurb, menuPhoto } from "@/lib/menu-photos";
 import { usePos } from "@/lib/store";
-import type { Addon, OrderType, Product } from "@/lib/types";
+import { PAYMENT_METHODS, SERVICE_RATE, TAX_RATE, type Addon, type CartItem, type OrderType, type PaymentMethod, type Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import "@/styles-guest.css";
 
@@ -17,15 +16,16 @@ const SUGAR = ["Normal sugar", "Less sugar", "No sugar"] as const;
 export function GuestMenu() {
   const products = usePos((s) => s.products);
   const cats = usePos((s) => s.menuCategories);
-  const addToCart = usePos((s) => s.addToCart);
-  const cart = usePos((s) => s.cart);
-  const changeQty = usePos((s) => s.changeQty);
-  const removeCart = usePos((s) => s.removeCart);
-  const totals = usePos((s) => s.totals)();
-  const orderType = usePos((s) => s.orderType);
-  const setOrderType = usePos((s) => s.setOrderType);
-  const table = usePos((s) => s.table);
-  const setTable = usePos((s) => s.setTable);
+  const taxEnabled = usePos((s) => s.taxEnabled);
+  const serviceFlag = usePos((s) => s.serviceEnabled);
+  const submitGuestOrder = usePos((s) => s.submitGuestOrder);
+  const orders = usePos((s) => s.orders);
+  const [bag, setBag] = useState<CartItem[]>([]);
+  const [orderType, setOrderType] = useState<OrderType>("Dine In");
+  const [table, setTable] = useState("01");
+  const [guestName, setGuestName] = useState("");
+  const [pay, setPay] = useState<PaymentMethod>("QRIS");
+  const [waitId, setWaitId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("Semua");
   const [pick, setPick] = useState<Product | null>(null);
@@ -39,9 +39,12 @@ export function GuestMenu() {
   const gridRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (!totals.qty) return;
+    const qty = bag.reduce((s, c) => s + c.qty, 0);
+    if (!qty) return;
     setBump((n) => n + 1);
-  }, [totals.qty]);
+  }, [bag]);
+
+  const waitOrder = waitId ? orders.find((o) => o.id === waitId) : undefined;
 
   useEffect(() => {
     const lock = (screen.orientation as ScreenOrientation & { lock?: (m: string) => Promise<void> }).lock;
@@ -101,36 +104,61 @@ export function GuestMenu() {
       if (less) addons.push(less);
     }
     const bits = [ice !== "Normal ice" ? ice : "", sugar !== "Normal sugar" ? sugar : "", note.trim()].filter(Boolean);
-    addToCart(pick, addons, bits.join(" · "));
-    nudgeCloud();
-    toast.success(`${pick.name} masuk ke kasir`);
+    const noteText = bits.join(" · ");
+    const key = `${pick.id}-${addons.map((a) => a.id).join(",")}-${noteText}`;
+    setBag((prev) => {
+      const hit = prev.find((c) => c.key === key);
+      if (hit) return prev.map((c) => (c.key === key ? { ...c, qty: c.qty + 1 } : c));
+      return [
+        {
+          key,
+          productId: pick.id,
+          name: pick.name,
+          price: pick.price,
+          cogs: pick.cogs,
+          qty: 1,
+          addons,
+          note: noteText,
+          kitchen: pick.kitchen,
+        },
+        ...prev,
+      ];
+    });
+    toast.success(`${pick.name} masuk pesanan`);
     setPick(null);
   };
 
+  const qty = bag.reduce((s, c) => s + c.qty, 0);
+  const subtotal = bag.reduce((s, c) => s + (c.price + c.addons.reduce((a, x) => a + x.price, 0)) * c.qty, 0);
+  const serviceOn = orderType === "Dine In" && serviceFlag;
+  const service = serviceOn ? Math.round(subtotal * SERVICE_RATE) : 0;
+  const tax = taxEnabled ? Math.round((subtotal + service) * TAX_RATE) : 0;
+  const total = subtotal + service + tax;
+
   const sendToPos = () => {
-    if (!cart.length) {
+    if (!bag.length) {
       toast.error("Keranjang masih kosong.");
       return;
     }
-    nudgeCloud();
-    const payload = {
-      source: "hven-guest-menu",
-      at: new Date().toISOString(),
+    if (!guestName.trim()) {
+      toast.error("Tulis nama dulu.");
+      return;
+    }
+    const res = submitGuestOrder({
+      customer: guestName,
+      payment: pay,
       type: orderType,
-      table: orderType === "Dine In" ? table : "-",
-      items: cart.map((i) => ({
-        id: i.productId,
-        name: i.name,
-        qty: i.qty,
-        note: i.note,
-        modifiers: i.addons.map((a) => a.name),
-        price: i.price,
-      })),
-      total: totals.total,
-    };
-    window.dispatchEvent(new CustomEvent("hven-pos-checkout", { detail: payload }));
-    toast.success("Pesanan sudah di kasir. Bayar di meja kasir.");
-    setTray(false);
+      table,
+      items: bag,
+    });
+    if ("error" in res) {
+      toast.error(res.error);
+      return;
+    }
+    setWaitId(res.order.id);
+    setBag([]);
+    setTray(true);
+    toast.success("Menunggu kasir konfirmasi bayar.");
   };
 
   const extraSum = ADDONS.filter((a) => extras.includes(a.id)).reduce((s, a) => s + a.price, 0);
@@ -176,9 +204,9 @@ export function GuestMenu() {
             </label>
             <button type="button" onClick={() => setTray(true)} className="glass relative grid size-11 place-items-center rounded-full">
               <ShoppingBag className="size-4" />
-              {totals.qty > 0 ? (
+              {qty > 0 ? (
                 <span key={bump} className="cta badge-pop absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full px-1 text-[10px] tabular-nums">
-                  {totals.qty}
+                  {qty}
                 </span>
               ) : null}
             </button>
@@ -214,11 +242,11 @@ export function GuestMenu() {
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="pointer-events-auto glass-deep dock-in mx-auto flex max-w-3xl items-center gap-3 rounded-[22px] p-2.5 pl-4">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-muted-foreground">{totals.qty} item</p>
-            <p className="truncate text-lg font-semibold tabular-nums leading-tight">{formatIDR(totals.total)}</p>
+            <p className="text-[11px] text-muted-foreground">{qty} item</p>
+            <p className="truncate text-lg font-semibold tabular-nums leading-tight">{formatIDR(total)}</p>
           </div>
-          <button type="button" className="cta h-11 shrink-0 rounded-full px-4 text-sm" onClick={() => (cart.length ? sendToPos() : setTray(true))}>
-            Checkout to POS
+          <button type="button" className="cta h-11 shrink-0 rounded-full px-4 text-sm" onClick={() => setTray(true)}>
+            Lanjut bayar
           </button>
         </div>
       </div>
@@ -297,11 +325,27 @@ export function GuestMenu() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Your order</h2>
+              <h2 className="text-xl font-semibold">
+                {waitOrder?.status === "paid" ? "Pesanan diterima" : waitOrder ? "Menunggu kasir" : "Pesanan kamu"}
+              </h2>
               <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => setTray(false)}>
                 <X className="size-4" />
               </button>
             </div>
+            {waitOrder?.status === "paid" ? (
+              <p className="mt-6 text-center text-sm">Kasir sudah konfirmasi. Pesanan masuk dapur.</p>
+            ) : waitOrder?.status === "void" ? (
+              <p className="mt-6 text-center text-sm text-destructive">Pesanan dibatalkan kasir.</p>
+            ) : waitOrder ? (
+              <div className="mt-6 space-y-2 text-center">
+                <p className="font-mono text-lg">{waitOrder.number}</p>
+                <p className="text-sm text-muted-foreground">
+                  {waitOrder.customer} · {waitOrder.payment} · {formatIDR(waitOrder.total)}
+                </p>
+                <p className="text-sm">Bayar di kasir. Tunggu konfirmasi.</p>
+              </div>
+            ) : (
+              <>
             <div className="mt-3 flex gap-2">
               {(["Dine In", "Takeaway"] as OrderType[]).map((t) => (
                 <button key={t} type="button" onClick={() => setOrderType(t)} className={cn("glass h-11 flex-1 rounded-full text-sm", orderType === t && "glass-hot")}>
@@ -319,35 +363,47 @@ export function GuestMenu() {
               </div>
             ) : null}
             <ul className="mt-4 space-y-2">
-              {cart.length === 0 ? (
+              {bag.length === 0 ? (
                 <li className="py-8 text-center text-sm text-muted-foreground">Keranjang kosong.</li>
               ) : (
-                cart.map((item) => (
+                bag.map((item) => (
                   <li key={item.key} className="glass flex items-center gap-3 rounded-2xl p-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium leading-tight">{item.name}</p>
                       {item.note ? <p className="text-xs text-muted-foreground">{item.note}</p> : null}
-                      <p className="price-glow text-xs font-medium tabular-nums">{formatIDR(item.price * item.qty)}</p>
+                      <p className="price-glow text-xs font-medium tabular-nums">{formatIDR((item.price + item.addons.reduce((s, a) => s + a.price, 0)) * item.qty)}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => changeQty(item.key, -1)}>
+                      <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => setBag((xs) => xs.map((c) => (c.key === item.key ? { ...c, qty: c.qty - 1 } : c)).filter((c) => c.qty > 0))}>
                         <Minus className="size-4" />
                       </button>
                       <span className="w-6 text-center tabular-nums">{item.qty}</span>
-                      <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => { changeQty(item.key, 1); nudgeCloud(); }}>
+                      <button type="button" className="glass grid size-11 place-items-center rounded-full" onClick={() => setBag((xs) => xs.map((c) => (c.key === item.key ? { ...c, qty: c.qty + 1 } : c)))}>
                         <Plus className="size-4" />
                       </button>
                     </div>
-                    <button type="button" className="text-xs text-destructive" onClick={() => removeCart(item.key)}>
+                    <button type="button" className="text-xs text-destructive" onClick={() => setBag((xs) => xs.filter((c) => c.key !== item.key))}>
                       Hapus
                     </button>
                   </li>
                 ))
               )}
             </ul>
+            <Input className="glass mt-4 h-11 rounded-2xl bg-transparent" placeholder="Nama kamu" value={guestName} onChange={(e) => setGuestName(e.target.value)} />
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Metode bayar</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {PAYMENT_METHODS.map((m) => (
+                <button key={m} type="button" onClick={() => setPay(m)} className={cn("glass h-11 rounded-full text-sm", pay === m && "glass-hot")}>
+                  {m}
+                </button>
+              ))}
+            </div>
+            <p className="mt-3 text-right font-semibold tabular-nums">{formatIDR(total)}</p>
             <button type="button" className="cta mt-4 h-12 w-full rounded-full text-base" onClick={sendToPos}>
-              Checkout to POS
+              Kirim ke kasir
             </button>
+              </>
+            )}
           </div>
         </div>
       ) : null}

@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { detectWorkShift, isNightCorruptAttempt, shiftRangeLabel, workRangeLabel } from "@/lib/work-shift";
 import { photoKey, putAttendanceProof, rasterElement, resolveProof, toAttendanceProof } from "@/lib/att-photo";
 import { openWhatsAppGroup, receiptWaText, sendWhatsApp } from "@/lib/whatsapp";
+import { playKdsChime } from "@/lib/kds-chime";
 
 export function OrdersView() {
   const orders = usePos((s) => s.orders);
@@ -24,13 +25,17 @@ export function OrdersView() {
   const cancelOpenBill = usePos((s) => s.cancelOpenBill);
   const setPaymentOpen = usePos((s) => s.setPaymentOpen);
   const setOrderPayment = usePos((s) => s.setOrderPayment);
-  const [tab, setTab] = useState<"open" | "paid" | "all">("all");
+  const confirmGuestPay = usePos((s) => s.confirmGuestPay);
+  const [tab, setTab] = useState<"pending" | "open" | "paid" | "all">("all");
   const setReceipt = (id: string) => {
     const o = usePos.getState().orders.find((x) => x.id === id);
     if (o) usePos.setState({ lastReceipt: o, receiptOpen: true });
   };
   const openCount = orders.filter((o) => o.status === "open").length;
-  const rows = orders.filter((o) => (tab === "open" ? o.status === "open" : tab === "paid" ? o.status === "paid" : true));
+  const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const rows = orders.filter((o) =>
+    tab === "open" ? o.status === "open" : tab === "paid" ? o.status === "paid" : tab === "pending" ? o.status === "pending" : true,
+  );
   const payOpen = (id: string) => {
     const msg = resumeBill(id);
     if (msg) {
@@ -49,6 +54,7 @@ export function OrdersView() {
         <div className="flex flex-wrap gap-2">
           {(
             [
+              ["pending", `Tunggu bayar (${pendingCount})`],
               ["open", `Open bill (${openCount})`],
               ["paid", "Lunas"],
               ["all", "Semua"],
@@ -124,12 +130,24 @@ export function OrdersView() {
                   </div>
                 </td>
                 <td className="px-3 py-2">
-                  <Badge tone={o.status === "void" ? "danger" : o.status === "open" ? "warning" : "success"}>
-                    {o.status === "open" ? "Open bill" : o.status}
+                  <Badge tone={o.status === "void" ? "danger" : o.status === "open" || o.status === "pending" ? "warning" : "success"}>
+                    {o.status === "open" ? "Open bill" : o.status === "pending" ? "Tunggu bayar" : o.status}
                   </Badge>
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex flex-wrap justify-end gap-1">
+                    {o.status === "pending" && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const msg = confirmGuestPay(o.id);
+                          if (msg) toast.error(msg);
+                          else toast.success(`${o.number} lunas · masuk KDS`);
+                        }}
+                      >
+                        Konfirmasi lunas
+                      </Button>
+                    )}
                     {o.status === "open" && (
                       <>
                         <Button
@@ -204,16 +222,26 @@ function kdsWait(iso: string, now: number) {
 export function KitchenView() {
   const allOrders = usePos((s) => s.orders);
   const orders = allOrders.filter(
-    (o) => o.status !== "void" && o.items.some((i) => i.kitchen) && !HISTORIC_ORDER_IDS.has(o.id),
+    (o) => o.status === "paid" && o.items.some((i) => i.kitchen) && !HISTORIC_ORDER_IDS.has(o.id),
   );
   const setKds = usePos((s) => s.setKds);
   const waKitchen = usePos((s) => s.waKitchen);
   const waKitchenMode = usePos((s) => s.waKitchenMode);
   const [now, setNow] = useState(() => Date.now());
+  const seenKds = useRef<Set<string>>(new Set());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+  useEffect(() => {
+    const ids = orders.filter((o) => o.kdsStatus !== "done").map((o) => o.id);
+    let ring = false;
+    for (const id of ids) {
+      if (seenKds.current.size > 0 && !seenKds.current.has(id)) ring = true;
+      seenKds.current.add(id);
+    }
+    if (ring) playKdsChime();
+  }, [orders]);
   return (
     <div className="flex h-full flex-col gap-3 p-4">
       <h2 className="font-display text-xl font-medium">Kitchen Display</h2>
