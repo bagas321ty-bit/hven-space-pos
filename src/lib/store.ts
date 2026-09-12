@@ -45,6 +45,7 @@ import {
   TAX_RATE,
   SEED_MONEY,
   ensureMenuCategories,
+  normalizeAddon,
   normalizeCategoryName,
   normalizeManagerCash,
   replayMoney,
@@ -153,6 +154,7 @@ export interface AppState {
   menuCategories: string[];
   recipes: RecipeLine[];
   addons: Addon[];
+  addonGone: string[];
   cart: CartItem[];
   orderType: OrderType;
   table: string;
@@ -253,6 +255,8 @@ export interface AppState {
   setOrderType: (t: OrderType) => void;
   setTable: (t: string) => void;
   setCustomer: (n: string) => void;
+  upsertAddon: (a: Omit<Addon, "id"> & { id?: string }) => string | null;
+  deleteAddon: (id: string) => void;
   addToCart: (product: Product, addons?: Addon[], note?: string) => void;
   changeQty: (key: string, delta: number) => void;
   removeCart: (key: string) => void;
@@ -491,6 +495,7 @@ export const usePos = create<AppState>()(
       menuCategories: ensureMenuCategories(undefined, PRODUCTS),
       recipes: RECIPES,
       addons: ADDONS,
+      addonGone: [],
       cart: [],
       cartEpoch: 0,
       openBillId: null,
@@ -818,6 +823,7 @@ export const usePos = create<AppState>()(
         const key = `${product.id}-${addons.map((a) => a.id).join(",")}-${note}`;
         const cart = [...get().cart];
         const existing = cart.find((c) => c.key === key);
+        const addCogs = addons.reduce((s, a) => s + (a.cogs || 0), 0);
         if (existing) existing.qty += 1;
         else
           cart.unshift({
@@ -825,7 +831,7 @@ export const usePos = create<AppState>()(
             productId: product.id,
             name: product.name,
             price: product.price,
-            cogs: product.cogs,
+            cogs: product.cogs + addCogs,
             qty: 1,
             addons,
             note,
@@ -1599,6 +1605,30 @@ export const usePos = create<AppState>()(
         });
         nudgeCloud();
       },
+      upsertAddon: (a) => {
+        const name = (a.name ?? "").trim();
+        if (!name) return "Nama add-on wajib.";
+        const row = normalizeAddon({
+          id: a.id || uid("ad"),
+          name,
+          price: a.price,
+          cogs: a.cogs,
+          pool: a.pool,
+        });
+        const list = get().addons;
+        const i = list.findIndex((x) => x.id === row.id);
+        const addons = i >= 0 ? list.map((x, idx) => (idx === i ? row : x)) : [...list, row];
+        set({ addons, addonGone: get().addonGone.filter((id) => id !== row.id) });
+        nudgeCloud();
+        return null;
+      },
+      deleteAddon: (id) => {
+        set({
+          addons: get().addons.filter((a) => a.id !== id),
+          addonGone: [id, ...get().addonGone.filter((x) => x !== id)].slice(0, 400),
+        });
+        nudgeCloud();
+      },
       deleteProduct: (id) => {
         set({
           products: get().products.filter((p) => p.id !== id),
@@ -2067,6 +2097,10 @@ export const usePos = create<AppState>()(
           expenses: settleExpenses(keepExpensePay(keepById(payload.expenses ?? [], get().expenses), get().expenses), payload.expenseGone ?? get().expenseGone),
           expenseGone: payload.expenseGone ?? get().expenseGone ?? [],
           productGone: payload.productGone ?? get().productGone ?? [],
+          addons: keepById(payload.addons ?? [], get().addons)
+            .filter((a) => !(payload.addonGone ?? get().addonGone ?? []).includes(a.id))
+            .map((a) => normalizeAddon({ ...a, id: a.id, name: a.name || "Add-on" })),
+          addonGone: payload.addonGone ?? get().addonGone ?? [],
           incomes: keepById(payload.incomes, get().incomes),
           incidents: keepById(payload.incidents, get().incidents),
           inventory: payload.inventory.map(normalizeIngredient),
@@ -2161,6 +2195,10 @@ export const usePos = create<AppState>()(
           moneyIn: p.moneyIn ?? [],
           expenseGone: Array.isArray(p.expenseGone) ? p.expenseGone.filter((x) => typeof x === "string") : [],
           productGone: Array.isArray(p.productGone) ? p.productGone.filter((x) => typeof x === "string") : [],
+          addonGone: Array.isArray(p.addonGone) ? p.addonGone.filter((x) => typeof x === "string") : [],
+          addons: Array.isArray(p.addons) && p.addons.length
+            ? p.addons.map((a) => normalizeAddon({ ...a, id: a.id || "ad", name: a.name || "Add-on" }))
+            : ADDONS,
           menuCategories: ensureMenuCategories(p.menuCategories, p.products ?? current.products),
           sheetSync: p.sheetSync ?? "",
           openBillId: p.openBillId ?? null,
@@ -2226,6 +2264,8 @@ export const usePos = create<AppState>()(
         discount: s.discount,
         discountLabel: s.discountLabel,
         recipes: s.recipes,
+        addons: s.addons,
+        addonGone: s.addonGone,
         testPurge: s.testPurge,
         sessionLoggedIn: s.sessionLoggedIn,
         sessionEmail: s.sessionEmail,

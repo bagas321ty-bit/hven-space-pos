@@ -92,11 +92,11 @@ export const WORK_SHIFTS: WorkShift[] = [
 ];
 
 export const ADDONS: Addon[] = [
-  { id: "ad1", name: "Extra Shot", price: 8000 },
-  { id: "ad2", name: "Oat Milk", price: 5000 },
-  { id: "ad3", name: "Less Ice", price: 0 },
-  { id: "ad4", name: "Extra Syrup", price: 3000 },
-  { id: "ad5", name: "Extra Keju", price: 4000 },
+  { id: "ad1", name: "Extra Shot", price: 8000, cogs: 2500, pool: "drink" },
+  { id: "ad2", name: "Oat Milk", price: 5000, cogs: 2000, pool: "drink" },
+  { id: "ad3", name: "Less Ice", price: 0, cogs: 0, pool: "drink" },
+  { id: "ad4", name: "Extra Syrup", price: 3000, cogs: 800, pool: "drink" },
+  { id: "ad5", name: "Extra Keju", price: 4000, cogs: 1500, pool: "food" },
 ];
 
 export const INVENTORY: Ingredient[] = (

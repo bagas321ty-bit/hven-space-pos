@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ProductIcon } from "@/components/icon-map";
-import { ADDONS } from "@/data/seed";
 import { toast } from "sonner";
 import { formatIDR, formatTimeID, uid } from "@/lib/format";
 import { compressMenuPhoto, MENU_LIBRARY, menuPhoto } from "@/lib/menu-photos";
@@ -270,6 +269,7 @@ export function ModifierModal() {
   const product = usePos((s) => s.productModal);
   const setProductModal = usePos((s) => s.setProductModal);
   const addToCart = usePos((s) => s.addToCart);
+  const addons = usePos((s) => s.addons);
   const [picked, setPicked] = useState<string[]>([]);
   const [note, setNote] = useState("");
 
@@ -277,6 +277,12 @@ export function ModifierModal() {
     setPicked([]);
     setNote("");
   }, [product?.id]);
+
+  const pool = addons.filter((a) => {
+    if (a.pool === "all") return true;
+    if (product?.category === "Food") return a.pool === "food";
+    return a.pool === "drink";
+  });
 
   return (
     <Dialog open={!!product} onOpenChange={(v) => !v && setProductModal(null)}>
@@ -293,7 +299,7 @@ export function ModifierModal() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {ADDONS.map((a) => {
+              {pool.map((a) => {
                 const on = picked.includes(a.id);
                 return (
                   <Button
@@ -313,7 +319,7 @@ export function ModifierModal() {
               onClick={() => {
                 addToCart(
                   product,
-                  ADDONS.filter((a) => picked.includes(a.id)),
+                  addons.filter((a) => picked.includes(a.id)),
                   note,
                 );
                 setProductModal(null);

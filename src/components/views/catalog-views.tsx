@@ -10,7 +10,7 @@ import { compressMenuPhoto, menuPhoto } from "@/lib/menu-photos";
 import { FILL_META, FILL_ORDER, fillFromStock, isIngredientLow, jarFullQty, qtyLabel, stockFromFill } from "@/lib/inventory";
 import { usePos } from "@/lib/store";
 import { runCloudSync } from "@/components/cloud-sync";
-import type { FillLevel, Ingredient, Staff } from "@/lib/types";
+import type { Addon, FillLevel, Ingredient, Staff } from "@/lib/types";
 import { alertWaText, sendWhatsApp, toWaPhone, type WaMode } from "@/lib/whatsapp";
 import { cn } from "@/lib/utils";
 
@@ -272,7 +272,117 @@ export function ProductsView() {
           </tbody>
         </table>
       </div>
+      <AddonsPanel />
     </div>
+  );
+}
+
+function AddonsPanel() {
+  const addons = usePos((s) => s.addons);
+  const upsertAddon = usePos((s) => s.upsertAddon);
+  const deleteAddon = usePos((s) => s.deleteAddon);
+  const [form, setForm] = useState({ name: "", price: 0, cogs: 0, pool: "all" as Addon["pool"] });
+  const [editId, setEditId] = useState<string | null>(null);
+  const save = () => {
+    const err = upsertAddon({ id: editId ?? undefined, ...form });
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    toast.success(editId ? "Add-on disimpan." : "Add-on ditambah.");
+    setForm({ name: "", price: 0, cogs: 0, pool: "all" });
+    setEditId(null);
+    void runCloudSync("local");
+  };
+  return (
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <div>
+        <h3 className="font-medium">Add-on / modifier</h3>
+        <p className="text-sm text-muted-foreground">Muncul saat tamu menekan menu. Harga jual + COGS untuk laba.</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <Input placeholder="Nama (Extra Shot)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <Input
+          inputMode="numeric"
+          placeholder="Harga jual"
+          value={form.price || ""}
+          onChange={(e) => setForm({ ...form, price: Number(e.target.value.replace(/\D/g, "") || 0) })}
+        />
+        <Input
+          inputMode="numeric"
+          placeholder="COGS / HPP"
+          value={form.cogs || ""}
+          onChange={(e) => setForm({ ...form, cogs: Number(e.target.value.replace(/\D/g, "") || 0) })}
+        />
+        <select
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          value={form.pool}
+          onChange={(e) => setForm({ ...form, pool: e.target.value as Addon["pool"] })}
+        >
+          <option value="all">Semua menu</option>
+          <option value="drink">Minuman</option>
+          <option value="food">Makanan</option>
+        </select>
+        <Button className="h-10" onClick={save}>
+          {editId ? "Simpan" : "Tambah add-on"}
+        </Button>
+      </div>
+      <div className="overflow-auto rounded-lg border border-border">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-muted text-xs uppercase text-muted-foreground">
+            <tr>
+              {["Nama", "Untuk", "Harga", "COGS", ""].map((h) => (
+                <th key={h} className="px-3 py-2">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {addons.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                  Belum ada add-on.
+                </td>
+              </tr>
+            ) : (
+              addons.map((a) => (
+                <tr key={a.id} className="border-t border-border">
+                  <td className="px-3 py-2 font-medium">{a.name}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{a.pool === "food" ? "Makanan" : a.pool === "drink" ? "Minuman" : "Semua"}</td>
+                  <td className="px-3 py-2 font-mono tabular-nums">{formatIDR(a.price)}</td>
+                  <td className="px-3 py-2 font-mono tabular-nums text-muted-foreground">{formatIDR(a.cogs)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setEditId(a.id);
+                        setForm({ name: a.name, price: a.price, cogs: a.cogs, pool: a.pool });
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => {
+                        deleteAddon(a.id);
+                        toast.success(`${a.name} dihapus.`);
+                        void runCloudSync("local");
+                      }}
+                    >
+                      Hapus
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

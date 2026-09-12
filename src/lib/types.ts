@@ -76,6 +76,19 @@ export interface Addon {
   id: string;
   name: string;
   price: number;
+  cogs: number;
+  pool: "drink" | "food" | "all";
+}
+
+export function normalizeAddon(a: Partial<Addon> & { id: string; name: string }): Addon {
+  const pool = a.pool === "food" || a.pool === "drink" ? a.pool : "all";
+  return {
+    id: a.id,
+    name: a.name.trim(),
+    price: Math.max(0, Math.round(Number(a.price) || 0)),
+    cogs: Math.max(0, Math.round(Number(a.cogs) || 0)),
+    pool,
+  };
 }
 
 export interface CartItem {

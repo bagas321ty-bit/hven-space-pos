@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { PinPad } from "@/components/pin-pad";
 import { runCloudSync } from "@/components/cloud-sync";
-import { ADDONS } from "@/data/seed";
 import { formatIDR } from "@/lib/format";
 import { menuBlurb, menuPhoto } from "@/lib/menu-photos";
 import { usePos } from "@/lib/store";
@@ -21,6 +21,18 @@ export function GuestMenu() {
   const serviceFlag = usePos((s) => s.serviceEnabled);
   const submitGuestOrder = usePos((s) => s.submitGuestOrder);
   const orders = usePos((s) => s.orders);
+  const addons = usePos((s) => s.addons);
+  const menuPin = usePos((s) => s.bukuPin);
+  const [gate, setGate] = useState(() => {
+    try {
+      return sessionStorage.getItem("hven-pesan-ok") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [pinBuf, setPinBuf] = useState("");
+  const [pinShow, setPinShow] = useState(false);
+  const [pinErr, setPinErr] = useState("");
   const [bag, setBag] = useState<CartItem[]>([]);
   const [orderType, setOrderType] = useState<OrderType>("Dine In");
   const [table, setTable] = useState("01");
@@ -84,8 +96,8 @@ export function GuestMenu() {
     };
   }, [list]);
 
-  const drinkAddons = ADDONS.filter((a) => a.id !== "ad5");
-  const foodAddons = ADDONS.filter((a) => a.id === "ad5");
+  const drinkAddons = addons.filter((a) => a.pool !== "food");
+  const foodAddons = addons.filter((a) => a.pool !== "drink");
   const addonPool = pick?.category === "Food" ? foodAddons : drinkAddons;
 
   const openPick = (p: Product) => {
@@ -99,14 +111,15 @@ export function GuestMenu() {
 
   const addPicked = () => {
     if (!pick) return;
-    const addons: Addon[] = ADDONS.filter((a) => extras.includes(a.id));
-    if (ice === "Less ice" && !addons.some((a) => a.id === "ad3")) {
-      const less = ADDONS.find((a) => a.id === "ad3");
-      if (less) addons.push(less);
+    const picked = addons.filter((a) => extras.includes(a.id));
+    const addonsOn: Addon[] = picked;
+    if (ice === "Less ice" && !addonsOn.some((a) => a.name.toLowerCase().includes("less ice"))) {
+      const less = addons.find((a) => a.name.toLowerCase().includes("less ice"));
+      if (less) addonsOn.push(less);
     }
     const bits = [ice !== "Normal ice" ? ice : "", sugar !== "Normal sugar" ? sugar : "", note.trim()].filter(Boolean);
     const noteText = bits.join(" · ");
-    const key = `${pick.id}-${addons.map((a) => a.id).join(",")}-${noteText}`;
+    const key = `${pick.id}-${addonsOn.map((a) => a.id).join(",")}-${noteText}`;
     setBag((prev) => {
       const hit = prev.find((c) => c.key === key);
       if (hit) return prev.map((c) => (c.key === key ? { ...c, qty: c.qty + 1 } : c));
@@ -116,9 +129,9 @@ export function GuestMenu() {
           productId: pick.id,
           name: pick.name,
           price: pick.price,
-          cogs: pick.cogs,
+          cogs: pick.cogs + addonsOn.reduce((s, a) => s + (a.cogs || 0), 0),
           qty: 1,
-          addons,
+          addons: addonsOn,
           note: noteText,
           kitchen: pick.kitchen,
         },
@@ -163,7 +176,39 @@ export function GuestMenu() {
     toast.success("Menunggu kasir konfirmasi bayar.");
   };
 
-  const extraSum = ADDONS.filter((a) => extras.includes(a.id)).reduce((s, a) => s + a.price, 0);
+  const extraSum = addons.filter((a) => extras.includes(a.id)).reduce((s, a) => s + a.price, 0);
+
+  const tryPin = (v: string) => {
+    setPinBuf(v);
+    setPinErr("");
+    if (v.length < 6) return;
+    if (v === menuPin) {
+      try {
+        sessionStorage.setItem("hven-pesan-ok", "1");
+      } catch {
+        /* ignore */
+      }
+      setGate(true);
+      return;
+    }
+    setPinErr("PIN salah");
+    setTimeout(() => setPinBuf(""), 350);
+  };
+
+  if (!gate) {
+    return (
+      <div className="guest-kiosk grid min-h-dvh place-items-center p-6">
+        <div className="gk-orb" aria-hidden />
+        <div className="glass-deep relative z-10 w-full max-w-sm rounded-[28px] p-6 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-primary">HVEN Space</p>
+          <h1 className="mt-2 text-xl font-semibold">Buka menu tamu</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Staff ketik PIN 6 digit. Tamu tidak perlu PIN tiap pesan.</p>
+          <p className="mt-3 min-h-5 text-sm text-destructive">{pinErr}</p>
+          <PinPad value={pinBuf} onChange={tryPin} show={pinShow} onToggleShow={() => setPinShow((v) => !v)} max={6} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="guest-kiosk">

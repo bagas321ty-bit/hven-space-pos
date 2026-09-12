@@ -24,6 +24,7 @@ import type {
   CartItem,
   MoneyBooks,
   LedgerEntry,
+  Addon,
 } from "@/lib/types";
 import { SEED_MONEY, replayMoney } from "@/lib/types";
 import type { WaMode } from "@/lib/whatsapp";
@@ -73,6 +74,8 @@ export interface CloudPayload {
   ledger?: LedgerEntry[];
   expenseGone?: string[];
   productGone?: string[];
+  addonGone?: string[];
+  addons?: Addon[];
   workShifts: WorkShift[];
   shiftLogs: ShiftChangeLog[];
   cart: CartItem[];
@@ -307,13 +310,23 @@ export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudP
   const preferLocal = ls >= rs;
   const expenseGone = unionGone(local.expenseGone, remote.expenseGone);
   const productGone = unionGone(local.productGone, remote.productGone);
+  const addonGone = unionGone(local.addonGone, remote.addonGone);
 
   return {
     products: unionById(local.products, remote.products, pickProduct).filter((p) => !productGone.includes(p.id)),
+    addons: unionById(local.addons, remote.addons, (a, b) => ({
+      ...a,
+      ...b,
+      name: (b.name || a.name || "").trim() || a.name,
+      price: typeof b.price === "number" ? b.price : a.price,
+      cogs: typeof b.cogs === "number" ? b.cogs : a.cogs ?? 0,
+      pool: b.pool || a.pool || "all",
+    })).filter((a) => !addonGone.includes(a.id)),
     menuCategories: unionCats(local.menuCategories, remote.menuCategories),
     orders: unionById(local.orders, remote.orders, pickOrder).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
     expenseGone,
     productGone,
+    addonGone,
     expenses: settleExpenses(unionById(local.expenses, remote.expenses, (a, b) => pickExpense(a, b, preferLocal)), expenseGone),
     incomes: unionById(local.incomes, remote.incomes, (a, b) => (preferLocal ? a : b)),
     incidents: unionById(local.incidents, remote.incidents, (a, b) => (preferLocal ? a : b)),
@@ -395,6 +408,8 @@ export function extractPayload(s: CloudPayload): CloudPayload {
     expenses: s.expenses,
     expenseGone: s.expenseGone ?? [],
     productGone: s.productGone ?? [],
+    addonGone: s.addonGone ?? [],
+    addons: (s.addons ?? []).filter((a) => !(s.addonGone ?? []).includes(a.id)),
     incomes: s.incomes,
     incidents: s.incidents,
     inventory: s.inventory,
@@ -445,6 +460,8 @@ export function payloadFingerprint(p: CloudPayload): string {
     exp,
     (p.expenseGone ?? []).join(","),
     (p.productGone ?? []).join(","),
+    (p.addonGone ?? []).join(","),
+    (p.addons ?? []).map((a) => `${a.id}:${a.name}:${a.price}:${a.cogs ?? 0}:${a.pool ?? ""}`).join(","),
     inc,
     cash,
     `${p.moneyBooks?.rekening ?? 0}:${p.moneyBooks?.cash ?? 0}:${p.moneyBooks?.sisihGajiBank ?? 0}`,

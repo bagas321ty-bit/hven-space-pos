@@ -25,7 +25,7 @@ NAME = os.environ.get("HVEN_CLOUD_NAME") or socket.gethostname() or "hven-cloud"
 LIST_KEYS = (
     "products", "orders", "expenses", "incomes", "incidents", "inventory",
     "staff", "attendance", "notifications", "audit", "adjustLogs", "bukuUsers",
-    "managerCash", "workShifts", "shiftLogs", "ledger",
+    "managerCash", "workShifts", "shiftLogs", "ledger", "addons",
 )
 
 
@@ -168,6 +168,14 @@ def merge_payload(incoming: dict, stored: dict | None) -> dict:
         out["productGone"] = pgone[:800]
         drop = set(pgone)
         out["products"] = [e for e in (out.get("products") or []) if not (isinstance(e, dict) and e.get("id") in drop)]
+    agone = []
+    for x in (stored.get("addonGone") or []) + (incoming.get("addonGone") or []):
+        if isinstance(x, str) and x and x not in agone:
+            agone.append(x)
+    if agone:
+        out["addonGone"] = agone[:400]
+        drop = set(agone)
+        out["addons"] = [e for e in (out.get("addons") or []) if not (isinstance(e, dict) and e.get("id") in drop)]
     return out
 
 
