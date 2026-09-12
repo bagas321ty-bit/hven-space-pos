@@ -74,6 +74,7 @@ import { isPriveCat, mergeSheetBooks, SHEET_SYNC } from "@/lib/sheet-books";
 import { slimAttendance } from "@/lib/att-photo-slim";
 import type { WaMode } from "@/lib/whatsapp";
 import type { CloudPayload } from "@/lib/pos-cloud";
+import { expenseKey, settleExpenses } from "@/lib/pos-cloud";
 import { nudgeCloud } from "@/lib/cloud-nudge";
 
 const memoryStore: Record<string, string> = {};
@@ -1216,8 +1217,13 @@ export const usePos = create<AppState>()(
             return `Prive minggu ini dibatasi ${formatIDR(cap)}. Sudah ${formatIDR(used)}, sisa kuota ${formatIDR(remain)}.`;
           }
         }
+        const row = { id: uid("exp"), ...e };
+        const key = expenseKey(row);
+        if (get().expenses.some((x) => expenseKey(x) === key)) {
+          return "Pengeluaran yang sama sudah tercatat. Tidak disimpan ulang.";
+        }
         set({
-          expenses: [{ id: uid("exp"), ...e }, ...get().expenses],
+          expenses: [row, ...get().expenses],
         });
         nudgeCloud();
         return null;
@@ -1638,7 +1644,7 @@ export const usePos = create<AppState>()(
           products: payload.products,
           menuCategories: ensureMenuCategories(payload.menuCategories, payload.products),
           orders: payload.orders,
-          expenses: payload.expenses,
+          expenses: settleExpenses(payload.expenses ?? []),
           incomes: payload.incomes,
           incidents: payload.incidents,
           inventory: payload.inventory.map(normalizeIngredient),

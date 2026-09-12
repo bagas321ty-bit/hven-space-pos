@@ -20,6 +20,7 @@ import {
   resolveMoneyIn,
 } from "@/lib/sheet-books";
 import { usePos } from "@/lib/store";
+import { runCloudSync } from "@/components/cloud-sync";
 import {
   DAILY_TARGET,
   MANAGER_CASH_CAP,
@@ -381,6 +382,7 @@ export function ExpensesView() {
   const [cat, setCat] = useState<"all" | string>("all");
   const [scope, setScope] = useState<"current" | "arsip" | "all">("all");
   const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
   const week = priveWeekInfo(expenses, form.date, priveWeeklyCap);
   const rows = useMemo(() => {
     return expenses.filter((e) => {
@@ -438,16 +440,23 @@ export function ExpensesView() {
       <div className="grid gap-4 lg:grid-cols-3">
         <form
           className="space-y-2 rounded-xl border border-border bg-card p-4"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            if (!form.desc || form.amount <= 0) return;
+            if (!form.desc || form.amount <= 0 || saving) return;
             const msg = addExpense(form);
             if (msg) {
               setErr(msg);
+              toast.error(msg);
               return;
             }
             setErr("");
-            toast.success("Pengeluaran tersimpan. Jangan tutup halaman sampai badge Tersinkron.");
+            setSaving(true);
+            toast.loading("Menyinkronkan pengeluaran…", { id: "exp-sync" });
+            await runCloudSync("local");
+            const st = usePos.getState().cloudStatus;
+            if (st === "ok") toast.success("Pengeluaran tersimpan dan tersinkron.", { id: "exp-sync" });
+            else toast.error(usePos.getState().cloudError || "Tersimpan di HP ini, cloud belum. Ketuk Tersinkron.", { id: "exp-sync" });
+            setSaving(false);
             setForm({ ...form, desc: isOeripCat(form.category) ? "Membantu Oerip Indonesia" : "", amount: 0, nota: "" });
           }}
         >
@@ -483,8 +492,8 @@ export function ExpensesView() {
             </p>
           ) : null}
           {err ? <p className="text-xs text-destructive">{err}</p> : null}
-          <Button type="submit" className="w-full h-11">
-            Simpan pengeluaran
+          <Button type="submit" className="w-full h-11" disabled={saving}>
+            {saving ? "Menyinkronkan…" : "Simpan pengeluaran"}
           </Button>
         </form>
         <div className="lg:col-span-2 max-h-[560px] overflow-auto rounded-xl border border-border">

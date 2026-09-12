@@ -158,6 +158,18 @@ function schedulePush() {
   }, wait);
 }
 
+const CANONICAL_HOST = "hven-space-pos-bagas321ty-1278.vercel.app";
+
+async function migrateLegacyHost() {
+  if (typeof window === "undefined") return false;
+  const h = window.location.hostname;
+  if (h === CANONICAL_HOST || h === "localhost" || h === "127.0.0.1") return false;
+  if (!/\.netlify\.app$|\.netlify\.com$/i.test(h)) return false;
+  await runCloudSync("boot");
+  window.location.replace(`https://${CANONICAL_HOST}${window.location.pathname}${window.location.search}`);
+  return true;
+}
+
 export function CloudSync() {
   useEffect(() => {
     let stopped = false;
@@ -168,7 +180,10 @@ export function CloudSync() {
         return;
       }
       lastFingerprint = payloadFingerprint(currentPayload());
-      void runCloudSync("boot");
+      void (async () => {
+        const moved = await migrateLegacyHost();
+        if (!stopped && !moved) void runCloudSync("boot");
+      })();
     };
     boot();
 
@@ -179,7 +194,6 @@ export function CloudSync() {
     });
     onCloudNudge(() => {
       schedulePush();
-      void runCloudSync("local");
     });
 
     const poll = window.setInterval(() => {

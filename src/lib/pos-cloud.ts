@@ -207,6 +207,36 @@ function pickScalar<T>(local: T, remote: T, preferLocal: boolean): T {
   return preferLocal ? local : remote;
 }
 
+export function expenseKey(e: Expense): string {
+  return [
+    e.date,
+    (e.category ?? "").trim().toLowerCase(),
+    (e.desc ?? "").trim().toLowerCase(),
+    String(e.amount ?? 0),
+    (e.nota ?? "").trim().toLowerCase(),
+  ].join("|");
+}
+
+function dedupeExpenses(rows: Expense[]): Expense[] {
+  const m = new Map<string, Expense>();
+  for (const e of rows) {
+    if (!e) continue;
+    const k = expenseKey(e);
+    const prev = m.get(k);
+    if (!prev) {
+      m.set(k, e);
+      continue;
+    }
+    const prefer = (e.id.startsWith("exp") && !prev.id.startsWith("exp")) || e.id > prev.id;
+    m.set(k, prefer ? e : prev);
+  }
+  return [...m.values()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? 1 : -1));
+}
+
+export function settleExpenses(rows: Expense[]): Expense[] {
+  return dedupeExpenses(rows);
+}
+
 export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudPayload {
   const ls = liveScore(local);
   const rs = liveScore(remote);
@@ -216,7 +246,7 @@ export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudP
     products: unionById(local.products, remote.products, pickProduct),
     menuCategories: unionCats(local.menuCategories, remote.menuCategories),
     orders: unionById(local.orders, remote.orders, pickOrder).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    expenses: unionById(local.expenses, remote.expenses, (a, b) => (preferLocal ? a : b)),
+    expenses: dedupeExpenses(unionById(local.expenses, remote.expenses, (a, b) => (preferLocal ? a : b))),
     incomes: unionById(local.incomes, remote.incomes, (a, b) => (preferLocal ? a : b)),
     incidents: unionById(local.incidents, remote.incidents, (a, b) => (preferLocal ? a : b)),
     inventory: unionById(local.inventory, remote.inventory, (a, b) => ({
