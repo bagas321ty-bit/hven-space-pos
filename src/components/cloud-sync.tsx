@@ -160,11 +160,10 @@ export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local")
 }
 
 function schedulePush() {
-  if (usePos.getState().cloudApplying) return;
   const fp = payloadFingerprint(currentPayload());
-  if (fp === lastFingerprint) return;
+  if (fp === lastFingerprint && !usePos.getState().cloudApplying) return;
   if (pushTimer) clearTimeout(pushTimer);
-  const wait = Math.max(400, skipPushUntil - Date.now());
+  const wait = usePos.getState().cloudApplying ? 700 : Math.max(300, skipPushUntil - Date.now());
   pushTimer = setTimeout(() => {
     void runCloudSync("local");
   }, wait);

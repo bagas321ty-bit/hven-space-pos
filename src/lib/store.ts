@@ -298,6 +298,7 @@ export interface AppState {
   closeShift: () => void;
   setShiftCashier: (staffId: string) => void;
   setorTunai: (amount: number, note?: string) => string | null;
+  setorGopay: (amount: number, note?: string) => string | null;
   adjustMoneyBooks: (patch: Partial<MoneyBooks>, note?: string) => void;
   ensureSisihAccrual: () => void;
   addStaff: (s: Staff) => void;
@@ -687,9 +688,18 @@ export const usePos = create<AppState>()(
       setWaKitchen: (v) => set({ waKitchen: v }),
       setWaOwnerMode: (v) => set({ waOwnerMode: v }),
       setWaKitchenMode: (v) => set({ waKitchenMode: v }),
-      setSisihGajiPerDay: (n) => set({ sisihGajiPerDay: Math.max(0, Math.round(n)) }),
-      setSisihOpsPerDay: (n) => set({ sisihOpsPerDay: Math.max(0, Math.round(n)) }),
-      setPriveWeeklyCap: (n) => set({ priveWeeklyCap: Math.max(0, Math.round(n)) }),
+      setSisihGajiPerDay: (n) => {
+        set({ sisihGajiPerDay: Math.max(0, Math.round(n)) });
+        nudgeCloud();
+      },
+      setSisihOpsPerDay: (n) => {
+        set({ sisihOpsPerDay: Math.max(0, Math.round(n)) });
+        nudgeCloud();
+      },
+      setPriveWeeklyCap: (n) => {
+        set({ priveWeeklyCap: Math.max(0, Math.round(n)) });
+        nudgeCloud();
+      },
       setManagerCashCap: (n) => {
         const cap = Math.max(0, Math.round(n));
         set({
@@ -704,6 +714,7 @@ export const usePos = create<AppState>()(
         set({
           managerCash: [...rest, next].sort((a, b) => a.date.localeCompare(b.date)),
         });
+        nudgeCloud();
       },
       setorManagerCash: (id) => {
         const cap = get().managerCashCap;
@@ -714,8 +725,12 @@ export const usePos = create<AppState>()(
             return { ...n, deposited: n.toDeposit };
           }),
         });
+        nudgeCloud();
       },
-      deleteManagerCash: (id) => set({ managerCash: get().managerCash.filter((r) => r.id !== id) }),
+      deleteManagerCash: (id) => {
+        set({ managerCash: get().managerCash.filter((r) => r.id !== id) });
+        nudgeCloud();
+      },
       confirmPin: (pin) => {
         const { adminPin, pendingView, staff } = get();
         const owner = staff.find((s) => s.access === "Full Admin" && s.pin === pin);
@@ -1561,6 +1576,7 @@ export const usePos = create<AppState>()(
         if (e.loss > 0) {
           get().notify("INCIDENT", `Insiden ${e.category}`, `${e.staff}: ${e.desc}`);
         }
+        nudgeCloud();
       },
       upsertProduct: (p) => {
         const list = get().products;
@@ -1588,11 +1604,16 @@ export const usePos = create<AppState>()(
         });
         nudgeCloud();
       },
-      setProductRecipes: (productId, lines) =>
+      setProductRecipes: (productId, lines) => {
         set({
           recipes: [...get().recipes.filter((r) => r.productId !== productId), ...lines.filter((l) => l.qty > 0)],
-        }),
-      addIngredient: (i) => set({ inventory: [normalizeIngredient(i), ...get().inventory] }),
+        });
+        nudgeCloud();
+      },
+      addIngredient: (i) => {
+        set({ inventory: [normalizeIngredient(i), ...get().inventory] });
+        nudgeCloud();
+      },
       setEditingProduct: (p) => set({ editingProduct: p }),
       clock: (staffId, note, photo, fullday) => {
         const s = get().staff.find((x) => x.id === staffId);
@@ -1857,7 +1878,7 @@ export const usePos = create<AppState>()(
         const n = Math.round(Number(amount) || 0);
         if (n <= 0) return "Nominal setor tidak valid.";
         const now = replayMoney(get().ledger);
-        if (n > now.cash) return `Kas tunai hanya ${formatIDR(now.cash)}.`;
+        if (n > now.cash) return `Kas tunai hanya ${formatIDR(now.cash)}. Pakai setor GoPay jika bukan dari laci.`;
         const actor = get().bukuSession?.name ?? get().staff.find((s) => s.id === get().currentStaffId)?.name ?? "Manager";
         const moved = appendLedger(get().ledger, {
           id: uid("led"),
@@ -1865,6 +1886,25 @@ export const usePos = create<AppState>()(
           kind: "setor",
           amount: n,
           note: note?.trim() || "Setor tunai ke rekening",
+          actor,
+        });
+        set({
+          moneyBooks: moved.moneyBooks,
+          ledger: moved.ledger,
+        });
+        nudgeCloud();
+        return null;
+      },
+      setorGopay: (amount, note) => {
+        const n = Math.round(Number(amount) || 0);
+        if (n <= 0) return "Nominal setor tidak valid.";
+        const actor = get().bukuSession?.name ?? get().staff.find((s) => s.id === get().currentStaffId)?.name ?? "Manager";
+        const moved = appendLedger(get().ledger, {
+          id: uid("led"),
+          at: new Date().toISOString(),
+          kind: "setor-gopay",
+          amount: n,
+          note: note?.trim() || "Setor GoPay ke rekening",
           actor,
         });
         set({
@@ -1922,10 +1962,12 @@ export const usePos = create<AppState>()(
         set({
           inventory: get().inventory.map((i) => (i.id === id ? { ...i, stock } : i)),
         }),
-      updateIngredient: (ing) =>
+      updateIngredient: (ing) => {
         set({
           inventory: get().inventory.map((i) => (i.id === ing.id ? normalizeIngredient(ing) : i)),
-        }),
+        });
+        nudgeCloud();
+      },
       commitOpname: (rows) => {
         const actor = get().staff.find((s) => s.id === get().currentStaffId)?.name ?? "Owner";
         const map = new Map(rows.map((r) => [r.id, r.stock]));
@@ -1942,6 +1984,7 @@ export const usePos = create<AppState>()(
           inventory,
           audit: [{ id: uid("au"), time: new Date().toLocaleString("id-ID"), actor, action: `Stok opname · ${notes.join(", ")}` }, ...get().audit],
         });
+        nudgeCloud();
       },
       notify: (type, title, message, orderId) =>
         set({
@@ -2000,6 +2043,7 @@ export const usePos = create<AppState>()(
       upsertMoneyIn: (row) => {
         const rest = get().moneyIn.filter((r) => r.date !== row.date);
         set({ moneyIn: [...rest, row].sort((a, b) => a.date.localeCompare(b.date)) });
+        nudgeCloud();
       },
       setPaymentOpen: (v) => set({ paymentOpen: v }),
       setReceiptOpen: (v) => set({ receiptOpen: v }),

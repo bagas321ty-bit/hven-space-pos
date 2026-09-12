@@ -614,6 +614,8 @@ export function IncomeView() {
             e.preventDefault();
             addIncome(form);
             setForm({ ...form, desc: "", amount: 0 });
+            toast.success("Pemasukan disimpan.");
+            void runCloudSync("local");
           }}
         >
           <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
@@ -798,6 +800,7 @@ export function MoneyInView() {
   const save = (date: string, patch: Partial<MoneyInRow>) => {
     const cur = resolveMoneyIn(date, orders, overrides);
     upsert({ ...cur, ...patch, date, source: "manual" });
+    void runCloudSync("local");
   };
   return (
     <div className="h-full overflow-auto p-4 space-y-4">
@@ -1472,16 +1475,27 @@ export function SavingCostView() {
 export function RekeningView() {
   const ledger = usePos((s) => s.ledger);
   const setorTunai = usePos((s) => s.setorTunai);
+  const setorGopay = usePos((s) => s.setorGopay);
   const ensureSisihAccrual = usePos((s) => s.ensureSisihAccrual);
   const books = replayMoney(ledger);
   const [amount, setAmount] = useState("");
+  const [gopayAmt, setGopayAmt] = useState("");
   const [note, setNote] = useState("");
+  const [gopayNote, setGopayNote] = useState("");
   const [saving, setSaving] = useState(false);
   const rekening = books.rekening;
   const cash = books.cash;
   const sisih = books.sisihGajiBank;
   const rows = [...(ledger ?? [])]
-    .filter((r) => r.kind === "setor" || r.kind === "expense-cash" || r.kind === "expense-bank" || r.kind === "expense-sisih" || r.kind === "sisih-gaji")
+    .filter(
+      (r) =>
+        r.kind === "setor" ||
+        r.kind === "setor-gopay" ||
+        r.kind === "expense-cash" ||
+        r.kind === "expense-bank" ||
+        r.kind === "expense-sisih" ||
+        r.kind === "sisih-gaji",
+    )
     .sort((a, b) => (a.at < b.at ? 1 : -1));
   useEffect(() => {
     ensureSisihAccrual();
@@ -1499,7 +1513,7 @@ export function RekeningView() {
         <Kpi label="Cash (laci kasir)" value={formatIDR(cash)} hint="Penjualan tunai − pengeluaran tunai − setor" />
         <Kpi label="Rekening sisih gaji" value={formatIDR(sisih)} hint="Saldo nyata · +280rb / hari" />
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <form
           className="space-y-2 rounded-xl border border-border bg-card p-4"
           onSubmit={async (e) => {
@@ -1509,7 +1523,7 @@ export function RekeningView() {
             const msg = setorTunai(n, note);
             if (msg) toast.error(msg);
             else {
-              toast.success(`Setor ${formatIDR(n)} masuk rekening`);
+              toast.success(`Setor tunai ${formatIDR(n)} · laci − rekening +`);
               setAmount("");
               setNote("");
               await runCloudSync("local");
@@ -1517,8 +1531,8 @@ export function RekeningView() {
             setSaving(false);
           }}
         >
-          <p className="text-sm font-medium">Uang setor (manager)</p>
-          <p className="text-xs text-muted-foreground">Ambil tunai dari laci, masuk rekening.</p>
+          <p className="text-sm font-medium">Setor tunai (dari laci)</p>
+          <p className="text-xs text-muted-foreground">Kas laci berkurang, rekening nambah.</p>
           <Input
             inputMode="numeric"
             placeholder="Nominal tunai"
@@ -1527,10 +1541,41 @@ export function RekeningView() {
           />
           <Input placeholder="Catatan (opsional)" value={note} onChange={(e) => setNote(e.target.value)} />
           <Button type="submit" className="h-11 w-full" disabled={saving || !amount}>
-            Setor ke rekening
+            Setor tunai
           </Button>
         </form>
-        <div className="lg:col-span-2 overflow-auto rounded-xl border border-border">
+        <form
+          className="space-y-2 rounded-xl border border-border bg-card p-4"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const n = Number(gopayAmt.replace(/\D/g, "") || 0);
+            setSaving(true);
+            const msg = setorGopay(n, gopayNote);
+            if (msg) toast.error(msg);
+            else {
+              toast.success(`Setor GoPay ${formatIDR(n)} masuk rekening`);
+              setGopayAmt("");
+              setGopayNote("");
+              await runCloudSync("local");
+            }
+            setSaving(false);
+          }}
+        >
+          <p className="text-sm font-medium">Setor GoPay</p>
+          <p className="text-xs text-muted-foreground">Tidak mengurangi laci. Hanya nambah rekening.</p>
+          <Input
+            inputMode="numeric"
+            placeholder="Nominal GoPay"
+            value={gopayAmt}
+            onChange={(e) => setGopayAmt(e.target.value.replace(/\D/g, ""))}
+          />
+          <Input placeholder="Catatan (opsional)" value={gopayNote} onChange={(e) => setGopayNote(e.target.value)} />
+          <Button type="submit" className="h-11 w-full" disabled={saving || !gopayAmt}>
+            Setor GoPay
+          </Button>
+        </form>
+      </div>
+      <div className="overflow-auto rounded-xl border border-border">
           <table className="w-full text-left text-sm">
             <thead className="bg-muted text-xs uppercase text-muted-foreground">
               <tr>
@@ -1554,8 +1599,10 @@ export function RekeningView() {
                     <td className="px-3 py-2 font-mono text-xs">{formatDateID(r.at.slice(0, 10))}</td>
                     <td className="px-3 py-2">
                       {r.kind === "setor"
-                        ? "Setor ke rekening"
-                        : r.kind === "expense-cash"
+                        ? "Setor tunai"
+                        : r.kind === "setor-gopay"
+                          ? "Setor GoPay"
+                          : r.kind === "expense-cash"
                           ? "Keluar tunai"
                           : r.kind === "expense-bank"
                             ? "Keluar non tunai"
@@ -1573,7 +1620,6 @@ export function RekeningView() {
               )}
             </tbody>
           </table>
-        </div>
       </div>
     </div>
   );

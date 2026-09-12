@@ -356,7 +356,7 @@ export const SEED_MONEY: MoneyBooks = { rekening: 921_000, cash: 720_000, sisihG
 export interface LedgerEntry {
   id: string;
   at: string;
-  kind: "setor" | "expense-cash" | "expense-bank" | "expense-sisih" | "sale-cash" | "void-cash" | "sisih-gaji" | "adjust";
+  kind: "setor" | "setor-gopay" | "expense-cash" | "expense-bank" | "expense-sisih" | "sale-cash" | "void-cash" | "sisih-gaji" | "adjust";
   amount: number;
   note: string;
   actor: string;
@@ -398,6 +398,8 @@ export function replayMoney(ledger: LedgerEntry[] | undefined, seed: MoneyBooks 
     const n = Math.round(Number(r.amount) || 0);
     if (r.kind === "setor") {
       cash -= Math.abs(n);
+      rekening += Math.abs(n);
+    } else if (r.kind === "setor-gopay") {
       rekening += Math.abs(n);
     } else if (r.kind === "expense-cash") {
       cash += n;
