@@ -252,7 +252,11 @@ export function mergeSheetBooks<T extends {
     };
   }
   const extraSales = extraAfter(persisted.dailySales, SHEET_DAILY_SALES, SHEET_OMZET_THROUGH);
-  const extraExp = (persisted.expenses ?? []).filter((e) => e.date > SHEET_EXPENSE_THROUGH);
+  const extraExp = (persisted.expenses ?? []).filter((e) => {
+    if (e.date > SHEET_EXPENSE_THROUGH) return true;
+    const id = String(e.id || "");
+    return id.startsWith("exp-") || id.startsWith("exp");
+  });
   const extraInc = (persisted.incomes ?? []).filter((i) => {
     if (i.category === "Penjualan Kasir") return false;
     if (i.date <= "2026-08-20" && SHEET_INCOMES.some((s) => s.date === i.date && s.amount === i.amount)) return false;

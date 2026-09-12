@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -446,6 +447,7 @@ export function ExpensesView() {
               return;
             }
             setErr("");
+            toast.success("Pengeluaran tersimpan. Jangan tutup halaman sampai badge Tersinkron.");
             setForm({ ...form, desc: isOeripCat(form.category) ? "Membantu Oerip Indonesia" : "", amount: 0, nota: "" });
           }}
         >

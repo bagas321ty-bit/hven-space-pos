@@ -210,9 +210,6 @@ function pickScalar<T>(local: T, remote: T, preferLocal: boolean): T {
 export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudPayload {
   const ls = liveScore(local);
   const rs = liveScore(remote);
-  if (ls < 8 && rs >= 8) return remote;
-  if (rs < 8 && ls >= 8) return local;
-
   const preferLocal = ls >= rs;
 
   return {
@@ -316,10 +313,15 @@ export function extractPayload(s: CloudPayload): CloudPayload {
 }
 
 export function payloadFingerprint(p: CloudPayload): string {
+  const exp = p.expenses.map((e) => `${e.id}:${e.date}:${e.amount}`).join(",");
+  const inc = p.incomes.map((e) => `${e.id}:${e.date}:${e.amount}`).join(",");
+  const cash = p.managerCash.map((e) => `${e.id}:${e.deposited ?? 0}`).join(",");
   return [
     p.orders.length,
     p.products.length,
-    p.expenses.length,
+    exp,
+    inc,
+    cash,
     p.attendance.length,
     p.menuCategories.join(","),
     p.shift.open ? "1" : "0",
@@ -328,7 +330,6 @@ export function payloadFingerprint(p: CloudPayload): string {
     p.bukuPin,
     p.adminPin,
     p.sheetSync,
-    p.managerCash.length,
     p.moneyIn.length,
     p.recipes.length,
   ].join("/");

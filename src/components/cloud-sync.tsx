@@ -143,14 +143,14 @@ export async function runCloudSync(reason: "boot" | "poll" | "manual" | "local")
 }
 
 function schedulePush() {
-  if (Date.now() < skipPushUntil) return;
   if (usePos.getState().cloudApplying) return;
   const fp = payloadFingerprint(currentPayload());
   if (fp === lastFingerprint) return;
   if (pushTimer) clearTimeout(pushTimer);
+  const wait = Math.max(400, skipPushUntil - Date.now());
   pushTimer = setTimeout(() => {
     void runCloudSync("local");
-  }, 1600);
+  }, wait);
 }
 
 export function CloudSync() {
@@ -180,10 +180,15 @@ export function CloudSync() {
 
     const onVis = () => {
       if (document.visibilityState === "visible") void runCloudSync("poll");
+      else void runCloudSync("local");
     };
     const onOnline = () => void runCloudSync("poll");
+    const onHide = () => {
+      void runCloudSync("local");
+    };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("online", onOnline);
+    window.addEventListener("pagehide", onHide);
 
     return () => {
       stopped = true;
@@ -191,6 +196,7 @@ export function CloudSync() {
       window.clearInterval(poll);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("online", onOnline);
+      window.removeEventListener("pagehide", onHide);
       if (pushTimer) clearTimeout(pushTimer);
     };
   }, []);
