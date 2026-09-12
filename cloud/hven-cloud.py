@@ -110,6 +110,14 @@ def merge_payload(incoming: dict, stored: dict | None) -> dict:
             cats.append(c)
     if cats:
         out["menuCategories"] = cats
+    gone = []
+    for x in (stored.get("expenseGone") or []) + (incoming.get("expenseGone") or []):
+        if isinstance(x, str) and x and x not in gone:
+            gone.append(x)
+    if gone:
+        out["expenseGone"] = gone[:800]
+        drop = set(gone)
+        out["expenses"] = [e for e in (out.get("expenses") or []) if not (isinstance(e, dict) and e.get("id") in drop)]
     return out
 
 

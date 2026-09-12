@@ -163,6 +163,7 @@ export interface AppState {
   adjustLogs: AdjustLog[];
   orders: Order[];
   expenses: Expense[];
+  expenseGone: string[];
   incomes: Income[];
   incidents: Incident[];
   inventory: Ingredient[];
@@ -490,6 +491,7 @@ export const usePos = create<AppState>()(
       adjustLogs: [],
       orders: SAMPLE_ORDERS,
       expenses: EXPENSES,
+      expenseGone: [],
       incomes: INCOMES,
       incidents: INCIDENTS,
       inventory: INVENTORY,
@@ -1521,7 +1523,13 @@ export const usePos = create<AppState>()(
           ledger = moved.ledger;
           moneyBooks = moved.moneyBooks;
         }
-        set({ expenses: get().expenses.filter((e) => e.id !== id), moneyBooks, ledger });
+        const gone = [id, ...get().expenseGone.filter((x) => x !== id)].slice(0, 800);
+        set({
+          expenses: get().expenses.filter((e) => e.id !== id),
+          expenseGone: gone,
+          moneyBooks,
+          ledger,
+        });
         nudgeCloud();
       },
       addIncome: (e) => {
@@ -1971,7 +1979,8 @@ export const usePos = create<AppState>()(
           products: keepProductMedia(payload.products, get().products),
           menuCategories: ensureMenuCategories(payload.menuCategories, payload.products),
           orders: payload.orders,
-          expenses: settleExpenses(keepExpensePay(payload.expenses ?? [], get().expenses)),
+          expenses: settleExpenses(keepExpensePay(payload.expenses ?? [], get().expenses), payload.expenseGone ?? get().expenseGone),
+          expenseGone: payload.expenseGone ?? get().expenseGone ?? [],
           incomes: payload.incomes,
           incidents: payload.incidents,
           inventory: payload.inventory.map(normalizeIngredient),
@@ -2064,6 +2073,7 @@ export const usePos = create<AppState>()(
           inventory: (p.inventory ?? current.inventory).map(normalizeIngredient),
           tutupBuku: ensureTutupBuku(p.tutupBuku ?? current.tutupBuku),
           moneyIn: p.moneyIn ?? [],
+          expenseGone: Array.isArray(p.expenseGone) ? p.expenseGone.filter((x) => typeof x === "string") : [],
           menuCategories: ensureMenuCategories(p.menuCategories, p.products ?? current.products),
           sheetSync: p.sheetSync ?? "",
           openBillId: p.openBillId ?? null,
@@ -2087,7 +2097,7 @@ export const usePos = create<AppState>()(
             shift: { ...(p.shift ?? current.shift), open: true },
           }),
           sheetSync: SHEET_SYNC,
-          expenses: synced.expenses,
+          expenses: settleExpenses(synced.expenses, Array.isArray(p.expenseGone) ? p.expenseGone : []),
           incomes: synced.incomes,
           dailySales: synced.dailySales,
           dailyBooks: synced.dailyBooks,
@@ -2100,6 +2110,7 @@ export const usePos = create<AppState>()(
         menuCategories: s.menuCategories,
         orders: s.orders,
         expenses: s.expenses,
+        expenseGone: s.expenseGone,
         incomes: s.incomes,
         incidents: s.incidents,
         inventory: s.inventory,

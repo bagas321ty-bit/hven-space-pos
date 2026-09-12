@@ -560,7 +560,16 @@ export function ExpensesView() {
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-destructive tabular-nums">{formatIDR(e.amount)}</td>
                   <td className="px-3 py-2">
-                    <Button size="sm" variant="ghost" className="text-destructive h-11" onClick={() => deleteExpense(e.id)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive h-11"
+                      onClick={() => {
+                        deleteExpense(e.id);
+                        toast.success("Pengeluaran dihapus.");
+                        void runCloudSync("local");
+                      }}
+                    >
                       Hapus
                     </Button>
                   </td>

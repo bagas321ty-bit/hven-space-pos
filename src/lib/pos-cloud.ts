@@ -70,6 +70,7 @@ export interface CloudPayload {
   managerCash: ManagerCashLog[];
   moneyBooks?: MoneyBooks;
   ledger?: LedgerEntry[];
+  expenseGone?: string[];
   workShifts: WorkShift[];
   shiftLogs: ShiftChangeLog[];
   cart: CartItem[];
@@ -270,20 +271,31 @@ function dedupeExpenses(rows: Expense[]): Expense[] {
   return [...m.values()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? 1 : -1));
 }
 
-export function settleExpenses(rows: Expense[]): Expense[] {
-  return dedupeExpenses(rows);
+export function settleExpenses(rows: Expense[], gone: string[] = []): Expense[] {
+  const drop = new Set(gone);
+  return dedupeExpenses(rows).filter((e) => !drop.has(e.id));
+}
+
+function unionGone(a: string[] | undefined, b: string[] | undefined): string[] {
+  const out: string[] = [];
+  for (const id of [...(a ?? []), ...(b ?? [])]) {
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out.slice(0, 800);
 }
 
 export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudPayload {
   const ls = liveScore(local);
   const rs = liveScore(remote);
   const preferLocal = ls >= rs;
+  const expenseGone = unionGone(local.expenseGone, remote.expenseGone);
 
   return {
     products: unionById(local.products, remote.products, pickProduct),
     menuCategories: unionCats(local.menuCategories, remote.menuCategories),
     orders: unionById(local.orders, remote.orders, pickOrder).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    expenses: dedupeExpenses(unionById(local.expenses, remote.expenses, (a, b) => pickExpense(a, b, preferLocal))),
+    expenseGone,
+    expenses: settleExpenses(unionById(local.expenses, remote.expenses, (a, b) => pickExpense(a, b, preferLocal)), expenseGone),
     incomes: unionById(local.incomes, remote.incomes, (a, b) => (preferLocal ? a : b)),
     incidents: unionById(local.incidents, remote.incidents, (a, b) => (preferLocal ? a : b)),
     inventory: unionById(local.inventory, remote.inventory, (a, b) => ({
@@ -360,6 +372,7 @@ export function extractPayload(s: CloudPayload): CloudPayload {
     menuCategories: s.menuCategories,
     orders: s.orders,
     expenses: s.expenses,
+    expenseGone: s.expenseGone ?? [],
     incomes: s.incomes,
     incidents: s.incidents,
     inventory: s.inventory,
@@ -408,6 +421,7 @@ export function payloadFingerprint(p: CloudPayload): string {
     p.orders.map((o) => `${o.id}:${o.status}:${o.kdsStatus}:${o.updatedAt ?? ""}`).join(","),
     p.products.map((x) => `${x.id}:${x.price}:${x.image?.length ?? 0}`).join(","),
     exp,
+    (p.expenseGone ?? []).join(","),
     inc,
     cash,
     `${p.moneyBooks?.rekening ?? 0}:${p.moneyBooks?.cash ?? 0}:${p.moneyBooks?.sisihGajiBank ?? 0}`,
