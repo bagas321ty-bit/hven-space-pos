@@ -9,6 +9,7 @@ import { formatIDR } from "@/lib/format";
 import { compressMenuPhoto, menuPhoto } from "@/lib/menu-photos";
 import { FILL_META, FILL_ORDER, fillFromStock, isIngredientLow, jarFullQty, qtyLabel, stockFromFill } from "@/lib/inventory";
 import { usePos } from "@/lib/store";
+import { runCloudSync } from "@/components/cloud-sync";
 import type { FillLevel, Ingredient, Staff } from "@/lib/types";
 import { alertWaText, sendWhatsApp, toWaPhone, type WaMode } from "@/lib/whatsapp";
 import { cn } from "@/lib/utils";
@@ -220,6 +221,7 @@ export function ProductsView() {
                               });
                               upsert({ ...p, image: await compressMenuPhoto(raw) });
                               toast.success(`Foto ${p.name} disimpan.`);
+                              void runCloudSync("local");
                             } catch {
                               toast.error("Foto gagal.");
                             }

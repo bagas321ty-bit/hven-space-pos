@@ -50,7 +50,7 @@ export function menuBlurb(p: Product): string {
   return "Menu HVEN Space.";
 }
 
-export function compressMenuPhoto(src: string, maxW = 720, quality = 0.68): Promise<string> {
+export function compressMenuPhoto(src: string, maxW = 480, quality = 0.52): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {

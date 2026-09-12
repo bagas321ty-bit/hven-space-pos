@@ -71,6 +71,20 @@ def save_doc(doc: dict) -> None:
     tmp.replace(SNAP)
 
 
+KEEP_FIELDS = ("image", "blurb", "pay", "nota", "updatedAt")
+
+
+def merge_row(incoming: dict, stored: dict | None) -> dict:
+    if not stored:
+        return incoming
+    out = dict(stored)
+    out.update(incoming)
+    for key in KEEP_FIELDS:
+        if not incoming.get(key) and stored.get(key):
+            out[key] = stored[key]
+    return out
+
+
 def union_id(incoming: list, stored: list) -> list:
     m: dict[str, dict] = {}
     for row in stored or []:
@@ -78,7 +92,7 @@ def union_id(incoming: list, stored: list) -> list:
             m[row["id"]] = row
     for row in incoming or []:
         if isinstance(row, dict) and isinstance(row.get("id"), str):
-            m[row["id"]] = row
+            m[row["id"]] = merge_row(row, m.get(row["id"]))
     return list(m.values())
 
 

@@ -34,7 +34,7 @@ export function isPhotoId(id: string): boolean {
 
 export function isPhotoData(data: string): boolean {
   if (typeof data !== "string") return false;
-  if (data.length < 32 || data.length > 120_000) return false;
+  if (data.length < 32 || data.length > 400_000) return false;
   return data.startsWith("data:image/jpeg") || data.startsWith("data:image/png") || data.startsWith("data:image/webp");
 }
 

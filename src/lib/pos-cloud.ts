@@ -178,12 +178,30 @@ function pickProduct(a: Product, b: Product): Product {
   const seed = PRODUCTS.find((p) => p.id === a.id);
   const sold = Math.max(a.soldQty ?? 0, b.soldQty ?? 0);
   const stock = Math.min(a.stock ?? 0, b.stock ?? 0);
+  const aT = a.updatedAt ?? "";
+  const bT = b.updatedAt ?? "";
   const changed = (p: Product) =>
-    !seed || p.price !== seed.price || p.name !== seed.name || p.category !== seed.category || p.available !== seed.available;
-  const aCh = changed(a);
-  const bCh = changed(b);
-  const named = aCh && !bCh ? a : bCh && !aCh ? b : (a.soldQty ?? 0) >= (b.soldQty ?? 0) ? a : b;
-  return { ...named, stock, soldQty: sold, available: named.available, image: a.image || b.image || named.image, blurb: a.blurb || b.blurb || named.blurb };
+    !seed ||
+    p.price !== seed.price ||
+    p.name !== seed.name ||
+    p.category !== seed.category ||
+    p.available !== seed.available ||
+    Boolean(p.image) ||
+    Boolean(p.blurb);
+  const named = aT || bT ? (bT > aT ? b : a) : changed(a) && !changed(b) ? a : changed(b) && !changed(a) ? b : (a.soldQty ?? 0) >= (b.soldQty ?? 0) ? a : b;
+  const image = (bT > aT ? b.image || a.image : a.image || b.image) || named.image;
+  const blurb = (bT > aT ? b.blurb || a.blurb : a.blurb || b.blurb) || named.blurb;
+  return { ...named, stock, soldQty: sold, available: named.available, image, blurb, updatedAt: bT > aT ? bT : aT || named.updatedAt };
+}
+
+function pickExpense(a: Expense, b: Expense, preferLocal: boolean): Expense {
+  const base = preferLocal ? a : b;
+  const other = preferLocal ? b : a;
+  return {
+    ...base,
+    nota: base.nota || other.nota,
+    pay: base.pay || other.pay,
+  };
 }
 
 function pickAttendance(a: Attendance, b: Attendance): Attendance {
@@ -232,7 +250,6 @@ export function expenseKey(e: Expense): string {
     (e.desc ?? "").trim().toLowerCase(),
     String(e.amount ?? 0),
     (e.nota ?? "").trim().toLowerCase(),
-    (e.pay ?? "").trim().toLowerCase(),
   ].join("|");
 }
 
@@ -265,7 +282,7 @@ export function mergePayloads(local: CloudPayload, remote: CloudPayload): CloudP
     products: unionById(local.products, remote.products, pickProduct),
     menuCategories: unionCats(local.menuCategories, remote.menuCategories),
     orders: unionById(local.orders, remote.orders, pickOrder).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    expenses: dedupeExpenses(unionById(local.expenses, remote.expenses, (a, b) => (preferLocal ? a : b))),
+    expenses: dedupeExpenses(unionById(local.expenses, remote.expenses, (a, b) => pickExpense(a, b, preferLocal))),
     incomes: unionById(local.incomes, remote.incomes, (a, b) => (preferLocal ? a : b)),
     incidents: unionById(local.incidents, remote.incidents, (a, b) => (preferLocal ? a : b)),
     inventory: unionById(local.inventory, remote.inventory, (a, b) => ({

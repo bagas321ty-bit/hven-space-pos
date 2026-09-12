@@ -17,7 +17,7 @@ function endpoints(): string[] {
 
 async function postOne<T>(url: string, body: Body): Promise<T | null> {
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => ctrl.abort(), 12_000) : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 45_000) : null;
   try {
     const res = await fetch(url, {
       method: "POST",

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { formatIDR, formatTimeID, uid } from "@/lib/format";
 import { compressMenuPhoto, MENU_LIBRARY, menuPhoto } from "@/lib/menu-photos";
 import { usePos } from "@/lib/store";
+import { runCloudSync } from "@/components/cloud-sync";
 import type { PaymentMethod, Product, Quadrant } from "@/lib/types";
 import { DISCOUNT_PRESETS } from "@/lib/types";
 import { PinPad } from "@/components/pin-pad";
@@ -419,6 +420,8 @@ export function ProductFormModal() {
             );
             setEditingProduct(null);
             setOpen(false);
+            toast.success("Menu disimpan. Menyinkronkan…");
+            void runCloudSync("local");
           }}
         >
           <Input required placeholder="Nama menu" value={name} onChange={(e) => setName(e.target.value)} />

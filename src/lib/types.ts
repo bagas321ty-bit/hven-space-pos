@@ -46,6 +46,7 @@ export interface Product {
   kitchen: boolean;
   image?: string;
   blurb?: string;
+  updatedAt?: string;
 }
 
 export const DEFAULT_MENU_CATEGORIES = ["Coffee", "Tea", "Mocktail", "Food", "Water"] as const;

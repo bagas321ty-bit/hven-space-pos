@@ -327,6 +327,29 @@ function ensureBooks(b?: MoneyBooks | null): MoneyBooks {
   };
 }
 
+function keepProductMedia(incoming: Product[], prev: Product[]): Product[] {
+  const map = new Map(prev.map((p) => [p.id, p]));
+  return incoming.map((p) => {
+    const o = map.get(p.id);
+    if (!o) return p;
+    return {
+      ...p,
+      image: p.image || o.image,
+      blurb: p.blurb || o.blurb,
+      updatedAt: (p.updatedAt ?? "") >= (o.updatedAt ?? "") ? p.updatedAt : o.updatedAt,
+    };
+  });
+}
+
+function keepExpensePay(incoming: Expense[], prev: Expense[]): Expense[] {
+  const map = new Map(prev.map((e) => [e.id, e]));
+  return incoming.map((e) => {
+    const o = map.get(e.id);
+    if (!o) return e;
+    return { ...e, pay: e.pay || o.pay, nota: e.nota || o.nota };
+  });
+}
+
 function addedItems(next: CartItem[], prev: CartItem[]): CartItem[] {
   const prevMap = new Map<string, number>();
   for (const i of prev) prevMap.set(i.key, (prevMap.get(i.key) ?? 0) + i.qty);
@@ -1437,7 +1460,8 @@ export const usePos = create<AppState>()(
       upsertProduct: (p) => {
         const list = get().products;
         const i = list.findIndex((x) => x.id === p.id);
-        const products = i >= 0 ? list.map((x, idx) => (idx === i ? p : x)) : [p, ...list];
+        const row = { ...p, updatedAt: new Date().toISOString() };
+        const products = i >= 0 ? list.map((x, idx) => (idx === i ? row : x)) : [row, ...list];
         set({
           products,
           menuCategories: ensureMenuCategories(get().menuCategories, products),
@@ -1871,10 +1895,10 @@ export const usePos = create<AppState>()(
             : get().managerCashCap;
         set({
           cloudApplying: true,
-          products: payload.products,
+          products: keepProductMedia(payload.products, get().products),
           menuCategories: ensureMenuCategories(payload.menuCategories, payload.products),
           orders: payload.orders,
-          expenses: settleExpenses(payload.expenses ?? []),
+          expenses: settleExpenses(keepExpensePay(payload.expenses ?? [], get().expenses)),
           incomes: payload.incomes,
           incidents: payload.incidents,
           inventory: payload.inventory.map(normalizeIngredient),
