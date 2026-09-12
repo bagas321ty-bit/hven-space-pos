@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Minus, Plus, Search, ShoppingBag, X } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,12 @@ export function GuestMenu() {
   const [sugar, setSugar] = useState<(typeof SUGAR)[number]>("Normal sugar");
   const [note, setNote] = useState("");
   const [extras, setExtras] = useState<string[]>([]);
+  const [bump, setBump] = useState(0);
+
+  useEffect(() => {
+    if (!totals.qty) return;
+    setBump((n) => n + 1);
+  }, [totals.qty]);
 
   const categories = ["Semua", ...(cats.length ? cats : [...new Set(products.map((p) => p.category))])];
   const list = useMemo(() => {
@@ -110,7 +116,7 @@ export function GuestMenu() {
           <button type="button" onClick={() => setTray(true)} className="glass relative grid size-11 place-items-center rounded-full">
             <ShoppingBag className="size-4" />
             {totals.qty > 0 ? (
-              <span className="cta absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full px-1 text-[10px] tabular-nums">
+              <span key={bump} className="cta badge-pop absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full px-1 text-[10px] tabular-nums">
                 {totals.qty}
               </span>
             ) : null}
@@ -140,10 +146,14 @@ export function GuestMenu() {
       </header>
 
       <main className="mx-auto grid max-w-lg grid-cols-2 gap-3 px-4 pb-32">
-        {list.map((p) => {
+        {list.map((p, i) => {
           const sold = !p.available || p.stock <= 0;
           return (
-            <article key={p.id} className="glass group overflow-hidden rounded-[22px]">
+            <article
+              key={`${cat}-${p.id}`}
+              className="glass menu-card card-in group overflow-hidden rounded-[22px]"
+              style={{ ["--i" as string]: i }}
+            >
               <button type="button" onClick={() => openPick(p)} disabled={sold} className="block w-full text-left disabled:opacity-40">
                 <div className="relative aspect-square overflow-hidden bg-black/25">
                   <img src={menuPhoto(p)} alt="" className="size-full object-cover transition-transform duration-300 group-active:scale-105" />
@@ -170,7 +180,7 @@ export function GuestMenu() {
       </main>
 
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="pointer-events-auto glass-deep mx-auto flex max-w-lg items-center gap-3 rounded-[22px] p-2.5 pl-4">
+        <div className="pointer-events-auto glass-deep dock-in mx-auto flex max-w-lg items-center gap-3 rounded-[22px] p-2.5 pl-4">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] text-muted-foreground">{totals.qty} item</p>
             <p className="truncate text-lg font-semibold tabular-nums leading-tight">{formatIDR(totals.total)}</p>
@@ -182,7 +192,7 @@ export function GuestMenu() {
       </div>
 
       {pick ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/55" onClick={() => setPick(null)}>
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 veil" onClick={() => setPick(null)}>
           <div
             className="glass-deep sheet-in max-h-[88dvh] w-full overflow-auto rounded-t-[28px] p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
             onClick={(e) => e.stopPropagation()}
@@ -249,7 +259,7 @@ export function GuestMenu() {
       ) : null}
 
       {tray ? (
-        <div className="fixed inset-0 z-40 flex items-end bg-black/55" onClick={() => setTray(false)}>
+        <div className="fixed inset-0 z-40 flex items-end bg-black/55 veil" onClick={() => setTray(false)}>
           <div
             className="glass-deep sheet-in max-h-[80dvh] w-full overflow-auto rounded-t-[28px] p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
             onClick={(e) => e.stopPropagation()}

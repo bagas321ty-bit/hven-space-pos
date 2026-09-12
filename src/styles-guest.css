@@ -3,6 +3,7 @@
   --gk-mute: color-mix(in oklab, #f7f4ef 58%, transparent);
   --gk-amber: #e2c08a;
   --gk-amber-ink: #1a140c;
+  --gk-ease: cubic-bezier(0.22, 1, 0.36, 1);
   font-family: Inter, "Plus Jakarta Sans", var(--font-sans), system-ui, sans-serif;
   color: var(--gk-ink);
   min-height: 100dvh;
@@ -18,6 +19,7 @@
   backdrop-filter: blur(20px) saturate(1.35);
   -webkit-backdrop-filter: blur(20px) saturate(1.35);
   border: 1px solid color-mix(in oklab, white 12%, transparent);
+  transition: background 200ms var(--gk-ease), border-color 200ms var(--gk-ease), box-shadow 200ms var(--gk-ease), transform 180ms var(--gk-ease);
 }
 
 .guest-kiosk .glass-deep {
@@ -39,10 +41,11 @@
   color: var(--gk-amber-ink);
   box-shadow: 0 8px 28px color-mix(in oklab, var(--gk-amber) 38%, transparent);
   font-weight: 600;
+  transition: transform 160ms var(--gk-ease), box-shadow 200ms var(--gk-ease);
 }
 
 .guest-kiosk .cta:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 .guest-kiosk .price-glow {
@@ -50,19 +53,72 @@
   text-shadow: 0 0 18px color-mix(in oklab, var(--gk-amber) 45%, transparent);
 }
 
-.guest-kiosk .sheet-in {
-  animation: gk-up 280ms cubic-bezier(0.22, 1, 0.36, 1);
+.guest-kiosk .veil {
+  animation: gk-veil 220ms var(--gk-ease);
 }
 
-@keyframes gk-up {
-  from { transform: translateY(18px); opacity: 0.6; }
+.guest-kiosk .sheet-in {
+  animation: gk-sheet 380ms var(--gk-ease);
+}
+
+.guest-kiosk .card-in {
+  animation: gk-card 420ms var(--gk-ease) both;
+  animation-delay: calc(var(--i, 0) * 42ms);
+}
+
+.guest-kiosk .dock-in {
+  animation: gk-dock 420ms var(--gk-ease);
+}
+
+.guest-kiosk .badge-pop {
+  animation: gk-pop 380ms cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+
+.guest-kiosk .menu-card img {
+  transition: transform 420ms var(--gk-ease);
+}
+
+.guest-kiosk .menu-card:active img,
+.guest-kiosk .menu-card:hover img {
+  transform: scale(1.06);
+}
+
+@keyframes gk-veil {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes gk-sheet {
+  from { transform: translateY(28%); opacity: 0.4; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes gk-card {
+  from { transform: translateY(14px) scale(0.97); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes gk-dock {
+  from { transform: translateY(120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes gk-pop {
+  0% { transform: scale(0.6); }
+  55% { transform: scale(1.18); }
+  100% { transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .guest-kiosk .sheet-in,
-  .guest-kiosk .cta {
-    animation: none;
-    transform: none;
+  .guest-kiosk .card-in,
+  .guest-kiosk .dock-in,
+  .guest-kiosk .veil,
+  .guest-kiosk .badge-pop,
+  .guest-kiosk .cta,
+  .guest-kiosk .menu-card img {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
   }
 }
