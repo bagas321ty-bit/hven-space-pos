@@ -7,6 +7,7 @@ import { ProductIcon } from "@/components/icon-map";
 import { ADDONS } from "@/data/seed";
 import { toast } from "sonner";
 import { formatIDR, formatTimeID, uid } from "@/lib/format";
+import { compressMenuPhoto, MENU_LIBRARY, menuPhoto } from "@/lib/menu-photos";
 import { usePos } from "@/lib/store";
 import type { PaymentMethod, Product, Quadrant } from "@/lib/types";
 import { DISCOUNT_PRESETS } from "@/lib/types";
@@ -343,6 +344,9 @@ export function ProductFormModal() {
   const [cogs, setCogs] = useState(7000);
   const [stock, setStock] = useState(20);
   const [kitchen, setKitchen] = useState(true);
+  const [image, setImage] = useState("");
+  const [blurb, setBlurb] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [lines, setLines] = useState<{ ingredientId: string; qty: number }[]>([]);
 
   useEffect(() => {
@@ -355,6 +359,8 @@ export function ProductFormModal() {
       setCogs(editing.cogs);
       setStock(editing.stock);
       setKitchen(editing.kitchen);
+      setImage(editing.image ?? "");
+      setBlurb(editing.blurb ?? "");
       setLines(recipes.filter((r) => r.productId === editing.id).map((r) => ({ ingredientId: r.ingredientId, qty: r.qty })));
     } else {
       setId(uid("m"));
@@ -364,6 +370,8 @@ export function ProductFormModal() {
       setCogs(7000);
       setStock(20);
       setKitchen(true);
+      setImage("");
+      setBlurb("");
       setLines([]);
     }
     setNewCat("");
@@ -401,6 +409,8 @@ export function ProductFormModal() {
               quadrant: editing?.quadrant ?? ("Puzzle" as Quadrant),
               recommendation: editing?.recommendation ?? "Menu baru — pantau penjualan 2 minggu",
               kitchen,
+              image: image || undefined,
+              blurb: blurb.trim() || undefined,
             };
             upsert(p);
             setProductRecipes(
@@ -412,6 +422,68 @@ export function ProductFormModal() {
           }}
         >
           <Input required placeholder="Nama menu" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input placeholder="Deskripsi singkat di tablet tamu (opsional)" value={blurb} onChange={(e) => setBlurb(e.target.value)} />
+          <div className="space-y-2 rounded-lg border border-border p-3">
+            <p className="text-sm font-medium">Foto menu tamu</p>
+            <p className="text-xs text-muted-foreground">Tampil di tablet /pesan. Unggah foto sendiri atau pilih galeri HVEN.</p>
+            <div className="flex gap-3">
+              <img
+                src={image || menuPhoto({ name, category: cat, image })}
+                alt=""
+                className="size-24 rounded-lg object-cover"
+              />
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">
+                  {photoBusy ? "Memproses…" : "Unggah / kamera"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    disabled={photoBusy}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      setPhotoBusy(true);
+                      try {
+                        const raw = await new Promise<string>((resolve, reject) => {
+                          const r = new FileReader();
+                          r.onload = () => resolve(String(r.result));
+                          r.onerror = () => reject(new Error("Gagal baca file"));
+                          r.readAsDataURL(file);
+                        });
+                        setImage(await compressMenuPhoto(raw));
+                        toast.success("Foto siap. Simpan menu supaya tampil di tamu.");
+                      } catch {
+                        toast.error("Foto gagal diproses.");
+                      } finally {
+                        setPhotoBusy(false);
+                      }
+                    }}
+                  />
+                </label>
+                {image ? (
+                  <Button type="button" variant="ghost" className="h-11" onClick={() => setImage("")}>
+                    Pakai foto otomatis
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <div className="grid grid-cols-6 gap-1.5">
+              {MENU_LIBRARY.map((shot) => (
+                <button
+                  key={shot.id}
+                  type="button"
+                  title={shot.label}
+                  onClick={() => setImage(shot.src)}
+                  className={`overflow-hidden rounded-md border ${image === shot.src ? "border-primary" : "border-border"}`}
+                >
+                  <img src={shot.src} alt={shot.label} className="aspect-[3/4] w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-2">
             <label className="text-xs text-muted-foreground">Kategori</label>
             <select

@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Eye, EyeOff, Pencil, Tags, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { ProductIcon } from "@/components/icon-map";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatIDR } from "@/lib/format";
+import { menuPhoto } from "@/lib/menu-photos";
 import { FILL_META, FILL_ORDER, fillFromStock, isIngredientLow, jarFullQty, qtyLabel, stockFromFill } from "@/lib/inventory";
 import { usePos } from "@/lib/store";
 import type { FillLevel, Ingredient, Staff } from "@/lib/types";
@@ -85,7 +85,9 @@ export function ProductsView() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-xl font-medium">Manajemen Produk</h2>
-          <p className="text-sm text-muted-foreground">Edit harga, stok, resep, dan kategori POS. Tidak mengubah struk historis.</p>
+          <p className="text-sm text-muted-foreground">
+            Tambah menu dan ganti foto di sini. Tablet tamu (/pesan) ikut berubah setelah Tersinkron.
+          </p>
         </div>
         <div className="flex gap-2">
           <Input placeholder="Cari menu / SKU" value={q} onChange={(e) => setQ(e.target.value)} className="h-12 w-48" />
@@ -199,7 +201,7 @@ export function ProductsView() {
                 <tr key={p.id} className="border-t border-border">
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <ProductIcon name={p.icon} className="size-4 text-primary" />
+                      <img src={menuPhoto(p)} alt="" className="size-10 rounded-md object-cover" />
                       <div>
                         <p className="font-medium">{p.name}</p>
                         <p className="font-mono text-xs text-muted-foreground">{p.sku}</p>

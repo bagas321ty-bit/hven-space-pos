@@ -44,6 +44,8 @@ export interface Product {
   quadrant: Quadrant;
   recommendation: string;
   kitchen: boolean;
+  image?: string;
+  blurb?: string;
 }
 
 export const DEFAULT_MENU_CATEGORIES = ["Coffee", "Tea", "Mocktail", "Food", "Water"] as const;
