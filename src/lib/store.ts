@@ -346,7 +346,8 @@ function keepProductMedia(incoming: Product[], prev: Product[]): Product[] {
     return {
       ...p,
       image: pickMenuImage(p.image, o.image),
-      blurb: p.blurb || o.blurb,
+      blurb: (p.updatedAt ?? "") >= (o.updatedAt ?? "") ? p.blurb || o.blurb : o.blurb || p.blurb,
+      name: (p.updatedAt ?? "") >= (o.updatedAt ?? "") ? p.name || o.name : o.name || p.name,
       updatedAt: (p.updatedAt ?? "") >= (o.updatedAt ?? "") ? p.updatedAt : o.updatedAt,
     };
   });
@@ -1564,7 +1565,14 @@ export const usePos = create<AppState>()(
       upsertProduct: (p) => {
         const list = get().products;
         const i = list.findIndex((x) => x.id === p.id);
-        const row = { ...p, updatedAt: new Date().toISOString() };
+        const prev = i >= 0 ? list[i] : undefined;
+        const row = {
+          ...prev,
+          ...p,
+          blurb: (p.blurb ?? prev?.blurb ?? "").trim() || undefined,
+          image: p.image || prev?.image,
+          updatedAt: new Date().toISOString(),
+        };
         const products = i >= 0 ? list.map((x, idx) => (idx === i ? row : x)) : [row, ...list];
         set({
           products,

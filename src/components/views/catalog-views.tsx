@@ -231,6 +231,7 @@ export function ProductsView() {
                       <div>
                         <p className="font-medium">{p.name}</p>
                         <p className="font-mono text-xs text-muted-foreground">{p.sku}</p>
+                        {p.blurb ? <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.blurb}</p> : null}
                       </div>
                     </div>
                   </td>

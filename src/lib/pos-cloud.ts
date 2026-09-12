@@ -195,7 +195,7 @@ function pickProduct(a: Product, b: Product): Product {
   const named = aT || bT ? (bT > aT ? b : a) : changed(a) && !changed(b) ? a : changed(b) && !changed(a) ? b : (a.soldQty ?? 0) >= (b.soldQty ?? 0) ? a : b;
   const image = pickMenuImage(a.image, b.image) || named.image;
   const blurb = (bT > aT ? b.blurb || a.blurb : a.blurb || b.blurb) || named.blurb;
-  return { ...named, stock, soldQty: sold, available: named.available, image, blurb, updatedAt: bT > aT ? bT : aT || named.updatedAt };
+  return { ...named, stock, soldQty: sold, available: named.available, image, blurb: (blurb ?? "").trim() || named.blurb, updatedAt: bT > aT ? bT : aT || named.updatedAt };
 }
 
 function pickExpense(a: Expense, b: Expense, preferLocal: boolean): Expense {
@@ -426,7 +426,7 @@ export function payloadFingerprint(p: CloudPayload): string {
   const cash = p.managerCash.map((e) => `${e.id}:${e.deposited ?? 0}`).join(",");
   return [
     p.orders.map((o) => `${o.id}:${o.status}:${o.kdsStatus}:${o.updatedAt ?? ""}`).join(","),
-    p.products.map((x) => `${x.id}:${x.price}:${x.image?.length ?? 0}`).join(","),
+    p.products.map((x) => `${x.id}:${x.price}:${x.name}:${x.image?.length ?? 0}:${(x.blurb ?? "").trim()}:${x.available ? 1 : 0}:${x.updatedAt ?? ""}`).join(","),
     exp,
     (p.expenseGone ?? []).join(","),
     (p.productGone ?? []).join(","),
