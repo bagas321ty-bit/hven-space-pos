@@ -375,6 +375,7 @@ export function DashboardView() {
 export function ExpensesView() {
   const expenses = usePos((s) => s.expenses);
   const addExpense = usePos((s) => s.addExpense);
+  const setExpensePay = usePos((s) => s.setExpensePay);
   const deleteExpense = usePos((s) => s.deleteExpense);
   const priveWeeklyCap = usePos((s) => s.priveWeeklyCap);
   const cur = cutoffPeriod();
@@ -533,7 +534,29 @@ export function ExpensesView() {
                   </td>
                   <td className="px-3 py-2">{e.desc}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{e.nota || "—"}</td>
-                  <td className="px-3 py-2 text-xs">{e.date >= "2026-09-12" ? (e.pay || "—") : "—"}</td>
+                  <td className="px-3 py-2">
+                    {e.date >= "2026-09-12" ? (
+                      <div className="flex gap-1">
+                        {(["Tunai", "Non Tunai"] as const).map((m) => (
+                          <Button
+                            key={m}
+                            type="button"
+                            size="sm"
+                            variant={e.pay === m ? "default" : "secondary"}
+                            className="h-9 px-2 text-xs"
+                            onClick={() => {
+                              setExpensePay(e.id, m);
+                              void runCloudSync("local");
+                            }}
+                          >
+                            {m}
+                          </Button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right font-mono text-destructive tabular-nums">{formatIDR(e.amount)}</td>
                   <td className="px-3 py-2">
                     <Button size="sm" variant="ghost" className="text-destructive h-11" onClick={() => deleteExpense(e.id)}>

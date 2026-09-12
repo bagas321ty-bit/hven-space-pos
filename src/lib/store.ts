@@ -271,6 +271,7 @@ export interface AppState {
   saveFeedback: (id: string, data: Omit<ServiceFeedback, "actor" | "at">) => void;
   skipFeedback: (id: string) => void;
   addExpense: (e: Omit<Expense, "id">) => string | null;
+  setExpensePay: (id: string, pay: "Tunai" | "Non Tunai") => void;
   deleteExpense: (id: string) => void;
   addIncome: (e: Omit<Income, "id">) => void;
   addIncident: (e: Omit<Incident, "id">) => void;
@@ -1354,6 +1355,12 @@ export const usePos = create<AppState>()(
         });
         nudgeCloud();
         return null;
+      },
+      setExpensePay: (id, pay) => {
+        const row = get().expenses.find((e) => e.id === id);
+        if (!row || row.date < "2026-09-12") return;
+        set({ expenses: get().expenses.map((e) => (e.id === id ? { ...e, pay } : e)) });
+        nudgeCloud();
       },
       deleteExpense: (id) => {
         set({ expenses: get().expenses.filter((e) => e.id !== id) });
